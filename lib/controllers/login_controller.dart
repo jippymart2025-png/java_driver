@@ -27,6 +27,8 @@ import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/common.dart';
+
 /// OPTIMIZATIONS:
 /// 1. Added validateAndLogin() — separates UI validation from business logic.
 /// 2. _saveUserToSharedPreferences uses a single prefs instance and batches
@@ -91,20 +93,36 @@ class LoginController extends GetxController {
         return;
       }
 
-      final isLogin = await FireStoreUtils.isLogin();
-      if (!isLogin) {
+      final isLoggedIn = await isUserLoggedIn();
+      if (!isLoggedIn) {
         Get.offAll(const LoginScreen());
         return;
       }
 
-      final userModel = await FireStoreUtils.getUserProfile(userId);
+      // Try old server first, fall back to SharedPreferences
+      UserModel? userModel;
+
+      try {
+        final isLogin = await FireStoreUtils.isLogin();
+        if (isLogin) {
+          userModel = await FireStoreUtils.getUserProfile(userId);
+        }
+      } catch (e) {
+        log('Old server lookup failed: $e');
+      }
+
+      // Fallback: build UserModel from SharedPreferences (new server data)
+      if (userModel == null) {
+        userModel = await getUserFromSharedPreferences();
+        if (userModel == null) {
+          Get.offAll(const LoginScreen());
+          return;
+        }
+        log('✅ Loaded user from SharedPreferences');
+      }
+
       await FireStoreUtils.getSettings();
       await FireStoreUtils.getForceUpdateConfig();
-
-      if (userModel == null) {
-        Get.offAll(const LoginScreen());
-        return;
-      }
 
       if (userModel.role != Constant.userRoleDriver) {
         Get.offAll(const LoginScreen());
@@ -148,76 +166,287 @@ class LoginController extends GetxController {
   }
 
   Future<void> loginWithEmailAndPassword() async {
-    // ShowToastDialog.showToast(
-    //     "login temporarily disabled"
-    // );
-    // return;
     ShowToastDialog.showLoader('Please wait'.tr);
+
     try {
+      final email = emailEditingController.value.text.trim();
+      final password = passwordEditingController.value.text.trim();
+
       final response = await http.post(
-        Uri.parse('${Constant.baseUrl}driver/login'),
-        //Uri.parse('http://187.127.156.147:8084/api/fm/auth/login'),
-        headers:
-        {
-          //const {'Content-Type': 'application/json'},
-          'Content-Type': 'application/json',
-        'accept': '*/*',
-        //'Authorization':
-        //'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODg0MzYsImV4cCI6MTc4MTY3NDgzNn0.vej38x22jMXmgGpi8McNp6tmVr_P3YPROeYyfSR4jJY',
-          },
+        Uri.parse('${Constant.baseUrl}fm/auth/login'),
+        headers: await getHeaders(),
         body: json.encode({
-          'email': emailEditingController.value.text.trim(),
-          'password': passwordEditingController.value.text.trim(),
+          'username': email,
+          'password': password,
         }),
       );
 
-      log('Login response [${response.statusCode}]: ${response.body}');
+      log(
+        'Login response [${response.statusCode}]: ${response.body}',
+      );
 
-      final responseData = json.decode(response.body) as Map<String, dynamic>;
+      Map<String, dynamic> responseData;
+
+      try {
+        responseData = json.decode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        log('Invalid JSON response: $e');
+
+        ShowToastDialog.showToast(
+          'Invalid response from server'.tr,
+        );
+
+        return;
+      }
+
+      /*
+     * ============================================================
+     * SUCCESS RESPONSE
+     *
+     * Actual API response:
+     *
+     * {
+     *   "jwt": "...",
+     *   "userType": "DRIVER",
+     *   "userId": 12,
+     *   "roles": []
+     * }
+     * ============================================================
+     */
+
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          responseData['jwt'] != null) {
+        final jwt = responseData['jwt'].toString().trim();
+        final userType =
+            responseData['userType']?.toString().trim().toUpperCase() ?? '';
+        final userId = responseData['userId']?.toString().trim() ?? '';
+
+        log('JWT received: ${jwt.isNotEmpty}');
+        log('userType: $userType');
+        log('userId: $userId');
+
+        // ------------------------------------------------------------
+        // Validate driver
+        // ------------------------------------------------------------
+
+        if (userType != 'DRIVER') {
+          ShowToastDialog.showToast(
+            'This user is not created in driver application.'.tr,
+          );
+          return;
+        }
+
+        if (userId.isEmpty) {
+          ShowToastDialog.showToast(
+            'Invalid user ID received from server.'.tr,
+          );
+          return;
+        }
+
+        // ------------------------------------------------------------
+        // Save authentication information
+        // ------------------------------------------------------------
+
+        final prefs = await SharedPreferences.getInstance();
+
+        await Future.wait([
+          prefs.setString('jwt', jwt),
+          prefs.setString('accessToken', jwt),
+          prefs.setString('userId', userId),
+          prefs.setString('firebase_id', userId),
+          prefs.setString('userEmail', email),
+          prefs.setString('userRole', Constant.userRoleDriver),
+          prefs.setString('userType', userType),
+          prefs.setBool('isLoggedIn', true),
+        ]);
+
+        // ------------------------------------------------------------
+        // Get FCM token
+        // ------------------------------------------------------------
+
+        try {
+          final fcmToken = await NotificationService.getToken();
+
+          if (fcmToken != null && fcmToken.trim().isNotEmpty) {
+            await prefs.setString(
+              'fcmToken',
+              fcmToken.trim(),
+            );
+          }
+        } catch (e) {
+          log('FCM token error: $e');
+        }
+
+        log('✅ Login successful');
+        log('✅ Driver ID: $userId');
+        log('✅ JWT saved');
+
+        // ------------------------------------------------------------
+        // Save JWT to FlutterSecureStorage for getHeaders()
+        // ------------------------------------------------------------
+
+        await saveAuthToken(jwt);
+
+        // ------------------------------------------------------------
+        // Fetch full driver details from getDriverDetails API
+        // ------------------------------------------------------------
+
+        try {
+          final driverResponse = await http.get(
+            Uri.parse(
+              '${Constant.baseUrl}driver/getDriverDetails?driverId=$userId',
+            ),
+            headers: await getHeaders()
+          );
+
+          log('getDriverDetails response [${driverResponse.statusCode}]: ${driverResponse.body}');
+
+          if (driverResponse.statusCode >= 200 &&
+              driverResponse.statusCode < 300) {
+            final driverData = json.decode(driverResponse.body);
+
+            Map<String, dynamic> userDetails;
+            if (driverData is Map<String, dynamic>) {
+              if (driverData.containsKey('data') &&
+                  driverData['data'] is Map) {
+                userDetails = driverData['data'] as Map<String, dynamic>;
+              } else {
+                userDetails = driverData;
+              }
+            } else {
+              userDetails = {};
+            }
+
+            if (userDetails.isNotEmpty) {
+              // Normalize: getDriverDetails returns driverId, not id
+              if (userDetails.containsKey('driverId') &&
+                  !userDetails.containsKey('id')) {
+                userDetails['id'] = userDetails['driverId'];
+              }
+              if (!userDetails.containsKey('role')) {
+                userDetails['role'] = Constant.userRoleDriver;
+              }
+              if (!userDetails.containsKey('active')) {
+                userDetails['active'] = true;
+              }
+              if (!userDetails.containsKey('isActive')) {
+                userDetails['isActive'] = true;
+              }
+
+              await _saveUserToSharedPreferences(userDetails);
+              log('✅ Driver details saved to SharedPreferences');
+            }
+          } else {
+            log('⚠️ getDriverDetails failed: ${driverResponse.statusCode}');
+          }
+        } catch (e) {
+          log('⚠️ getDriverDetails error: $e');
+        }
+
+        // ------------------------------------------------------------
+        // Continue to existing redirect flow
+        // ------------------------------------------------------------
+
+        await redirectScreen();
+
+        return;
+      }
+
+      /*
+     * ============================================================
+     * OLD API RESPONSE SUPPORT
+     *
+     * If your backend sometimes still returns:
+     *
+     * {
+     *   "success": true,
+     *   "data": {...}
+     * }
+     * ============================================================
+     */
 
       if (response.statusCode == 200 &&
           responseData['success'] == true &&
           responseData['data'] != null) {
-        final userData = responseData['data'] as Map<String, dynamic>;
-        final userModel = UserModel.fromJson(userData);
+        final userData =
+        responseData['data'] as Map<String, dynamic>;
 
-        await _saveUserToSharedPreferences(userData);
+        final userModel = UserModel.fromJson(userData);
 
         if (userModel.role != Constant.userRoleDriver) {
           ShowToastDialog.showToast(
-              'This user is not created in driver application.'.tr);
+            'This user is not created in driver application.'.tr,
+          );
           return;
         }
 
         if (!_isDriverEnabled(userModel)) {
           ShowToastDialog.showToast(
-              'This user is disabled. Please contact the administrator.'.tr);
+            'This user is disabled. Please contact the administrator.'.tr,
+          );
           return;
         }
 
-        userModel.fcmToken = await NotificationService.getToken();
-        // Make the token available for `redirectScreen()` without requiring
-        // a second `updateUser()` call.
-        await (await SharedPreferences.getInstance())
-            .setString('fcmToken', userModel.fcmToken ?? '');
+        await _saveUserToSharedPreferences(userData);
+
+        try {
+          userModel.fcmToken =
+          await NotificationService.getToken();
+
+          await prefsSetFcmToken(userModel.fcmToken);
+        } catch (e) {
+          log('FCM token error: $e');
+        }
+
         await FireStoreUtils.updateUser(userModel);
-        redirectScreen();
-      } else {
-        ShowToastDialog.showToast(
-            responseData['message'] as String? ?? 'Login failed'.tr);
+
+        await redirectScreen();
+
+        return;
       }
+
+      /*
+     * ============================================================
+     * LOGIN FAILED
+     * ============================================================
+     */
+
+      String message =
+          responseData['message']?.toString().trim() ??
+              responseData['error']?.toString().trim() ??
+              'Login failed'.tr;
+
+      if (message.isEmpty) {
+        message = 'Login failed'.tr;
+      }
+
+      ShowToastDialog.showToast(message);
     } on http.ClientException catch (e) {
-      ShowToastDialog.showToast('Network error: ${e.message}'.tr);
-    } on FormatException {
-      ShowToastDialog.showToast('Invalid response format'.tr);
-    } catch (e) {
-      log('Login error: $e');
-      ShowToastDialog.showToast('An error occurred during login'.tr);
+      log('Network error: $e');
+
+      ShowToastDialog.showToast(
+        'Network error: ${e.message}'.tr,
+      );
+    } on FormatException catch (e) {
+      log('Format error: $e');
+
+      ShowToastDialog.showToast(
+        'Invalid response format'.tr,
+      );
+    } catch (e, stackTrace) {
+      log(
+        'Login error: $e',
+        stackTrace: stackTrace,
+      );
+
+      ShowToastDialog.showToast(
+        'An error occurred during login'.tr,
+      );
     } finally {
       ShowToastDialog.closeLoader();
     }
   }
-
   // ── SharedPreferences helpers ──────────────────────────────────────────────
 
   Future<void> _saveUserToSharedPreferences(
@@ -304,6 +533,19 @@ class LoginController extends GetxController {
     } catch (e) {
       log('❌ Error saving user to SharedPreferences: $e');
     }
+  }
+
+  Future<void> prefsSetFcmToken(String? token) async {
+    if (token == null || token.trim().isEmpty) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      'fcmToken',
+      token.trim(),
+    );
   }
 
   Future<UserModel?> getUserFromSharedPreferences() async {

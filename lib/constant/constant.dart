@@ -29,7 +29,7 @@ import 'package:get/get.dart';
 
 class Constant {
   // static String baseUrl  = "http://192.168.88.25:8000/api/";
-  static String baseUrl  = "https://web.jippymart.in/api/";
+  static String baseUrl  = "http://192.168.0.12:8084/api/";
   static String userRoleDriver = 'driver';
   static String userRoleCustomer = 'customer';
   static String userRoleVendor = 'vendor';

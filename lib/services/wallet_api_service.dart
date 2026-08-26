@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/wallet_transaction_model.dart';
 import 'package:jippydriver_driver/models/driver_incentive_model.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 
 class ApiService {
 
@@ -17,12 +18,9 @@ class ApiService {
       final response = await http.get(
 
         Uri.parse(
-          'http://srv1617582.hstgr.cloud:8084/api/driver/getDriverWalletTransactions?driverId=$driverId',
+          '${Constant.baseUrl}driver/getDriverWalletTransactions?driverId=$driverId',
         ),
-        headers: {
-          'accept': '*/*',
-          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE4NjQzNDcsImV4cCI6MTc4MTk1MDc0N30.uCaKvbP9JeECwzZ-JfRfrXealtftd5iNj5ueSKin2iQ', // IMPORTANT: no "Bearer " if backend not using it
-        },
+        headers: await getHeaders()
       );
 
 
@@ -89,16 +87,13 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse(
-          'http://srv1617582.hstgr.cloud:8084/api/driver/getDriverIncentiveHistory'
+          '${Constant.baseUrl}driver/getDriverIncentiveHistory'
               '?driverId=$driverId'
               '&filter=$filter'
               '&page=$page'
               '&size=$size',
         ),
-        headers: {
-          'accept': '*/*',
-          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE4NDg2NDQsImV4cCI6MTc4MTkzNTA0NH0.QqD_DoR7TVLG1XXEwoc63_H0xQrZdCAO2XuXOz7OWTc',
-        },
+        headers: await getHeaders()
       );
 
       log(

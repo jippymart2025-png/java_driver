@@ -2464,6 +2464,7 @@ import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/perf_telemetry.dart';
 import 'package:jippydriver_driver/utils/utils.dart';
@@ -2815,19 +2816,13 @@ class HomeController extends GetxController {
     // todayDashboardLoading.value = true;
 
     try {
-    //   final url = Uri.parse(
-    //
-    //       'http://srv1617582.hstgr.cloud:8084/api/driver/fetchEarnings?driverId=1&date=2026-05-13',
-    //
-    //
-    //   );
     final today = DateTime.now();
 
     final date =
         "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
 
     final url = Uri.parse(
-      'http://srv1617582.hstgr.cloud:8084/api/driver/fetchEarnings?driverId=$driverId&date=$date',
+      '${Constant.baseUrl}driver/fetchEarnings?driverId=$driverId&date=$date',
     );
 
       print("FINAL DRIVER ID = $driverId");
@@ -2837,13 +2832,7 @@ class HomeController extends GetxController {
 
       final response = await httpClient.get(
         url,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE2OTc0OTIsImV4cCI6MTc4MTc4Mzg5Mn0.aWAuZXJ_cvR869SLhto7ZPqrHz1CK6kZkIDvoK9S9x4'
-
-
-        },
+        headers: await getHeaders(),
         cacheStrategy: CacheStrategy.custom,
         customTTL: const Duration(seconds: 20),
         useCache: true,

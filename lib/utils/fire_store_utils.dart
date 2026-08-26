@@ -47,6 +47,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -1105,28 +1106,23 @@ class FireStoreUtils {
       // );
 
       final driverId = "4"; // TEMP FIX
-      final token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE3ODU0MjcsImV4cCI6MTc4MTg3MTgyN30.a_DpO9hDp_TaV7LXNGGrU3G9ecNQYRYth3YlCtiLM8g";
       final httpClient = HttpClientService();
 
       final url =
           // '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=$driverId';
 
-          'http://srv1617582.hstgr.cloud:8084/api/driver/fetchOrderEarningsHistory?driverId=$driverId';
+          '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=$driverId';
 
       log("EARNINGS URL => $url");
 
       final response = await httpClient.get(
         Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE4NjQzNDcsImV4cCI6MTc4MTk1MDc0N30.uCaKvbP9JeECwzZ-JfRfrXealtftd5iNj5ueSKin2iQ',
-        },
-        cacheStrategy: CacheStrategy.custom,
-        customTTL: const Duration(seconds: 25),
-        useCache: !forceRefresh,
-        forceRefresh: forceRefresh,
-        timeout: const Duration(seconds: 12),
+        headers: await getHeaders()
+        // cacheStrategy: CacheStrategy.custom,
+        // customTTL: const Duration(seconds: 25),
+        // useCache: !forceRefresh,
+        // forceRefresh: forceRefresh,
+        // timeout: const Duration(seconds: 12),
       );
 
       log("STATUS => ${response.statusCode}");
