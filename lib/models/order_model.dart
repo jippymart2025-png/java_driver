@@ -36,6 +36,17 @@ class OrderModel {
   String? toPay;
   Map<String, dynamic>? calculatedCharges;
 
+  //Newly added fields
+
+  double? pickUpDistanceInKms;
+  double? deliveryDistanceInKms;
+
+  num? pickUpCharges;
+  num? deliverCharges;
+  num? surgeFee;
+
+  //Newly added fields
+
   OrderModel({
     this.address,
     this.status,
@@ -66,9 +77,17 @@ class OrderModel {
     this.rejectedByDrivers,
     this.toPay,
     this.calculatedCharges,
+
+    //Newly added fields
+    this.pickUpDistanceInKms,
+    this.deliveryDistanceInKms,
+    this.pickUpCharges,
+    this.deliverCharges,
+    this.surgeFee,
+    //Newly added
   });
 
-  OrderModel.fromJson(Map<String, dynamic> json) {
+    OrderModel.fromJson(Map<String, dynamic> json) {
     try {
     // Handle address coming as Map or JSON string (also shipping_* aliases from some APIs)
     dynamic rawAddress = json['address'] ??
@@ -95,7 +114,8 @@ class OrderModel {
     } else {
       address = null;
     }
-    status = json['status'];
+    /////status = json['status'];
+    status = json['status'] ?? json['orderStatus'];
     couponId = json['couponId'];
     vendorID = json['vendorID']?.toString();
     driverID = json['driverID']?.toString();
@@ -125,11 +145,58 @@ class OrderModel {
                (json['vendor'] is String && json['vendor'] != null ? json['vendor']?.toString() : null);
     
     // Handle vendor coming as Map, JSON string, or null
+    /////////////// COMMENTED
+    // if (json['vendor'] != null) {
+    //   if (json['vendor'] is Map) {
+    //     try {
+    //       vendor = VendorModel.fromJson(Map<String, dynamic>.from(json['vendor']));
+    //       // Ensure vendorID is set from vendor object if not already set
+    //       if (vendorID == null && vendor?.id != null) {
+    //         vendorID = vendor!.id;
+    //       }
+    //     } catch (e) {
+    //       print('Error parsing vendor Map: $e');
+    //       vendor = null;
+    //     }
+    //   } else if (json['vendor'] is String) {
+    //     try {
+    //       final vendorString = json['vendor'] as String;
+    //       // Try to parse as JSON string first
+    //       final vendorJson = jsonDecode(vendorString);
+    //       if (vendorJson is Map) {
+    //         vendor = VendorModel.fromJson(Map<String, dynamic>.from(vendorJson));
+    //         // Ensure vendorID is set from vendor object if not already set
+    //         if (vendorID == null && vendor?.id != null) {
+    //           vendorID = vendor!.id;
+    //         }
+    //       } else {
+    //         // If it's not a JSON string, treat it as vendorID
+    //         vendorID = vendorString;
+    //         vendor = null;
+    //       }
+    //     } catch (e) {
+    //       // If JSON decode fails, treat the string as vendorID
+    //       print('Error decoding vendor JSON string: $e - treating as vendorID');
+    //       vendorID = json['vendor']?.toString();
+    //       vendor = null;
+    //     }
+    //   } else {
+    //     // vendor is not null but not Map or String - set vendorID if possible
+    //     vendorID = json['vendor']?.toString();
+    //     vendor = null;
+    //   }
+    // } else {
+    //   // vendor is null - vendorID should already be set from vendorID field above
+    //   vendor = null;
+   // }////////////////// COMMENTED
+
     if (json['vendor'] != null) {
       if (json['vendor'] is Map) {
         try {
-          vendor = VendorModel.fromJson(Map<String, dynamic>.from(json['vendor']));
-          // Ensure vendorID is set from vendor object if not already set
+          vendor = VendorModel.fromJson(
+            Map<String, dynamic>.from(json['vendor']),
+          );
+
           if (vendorID == null && vendor?.id != null) {
             vendorID = vendor!.id;
           }
@@ -137,38 +204,17 @@ class OrderModel {
           print('Error parsing vendor Map: $e');
           vendor = null;
         }
-      } else if (json['vendor'] is String) {
-        try {
-          final vendorString = json['vendor'] as String;
-          // Try to parse as JSON string first
-          final vendorJson = jsonDecode(vendorString);
-          if (vendorJson is Map) {
-            vendor = VendorModel.fromJson(Map<String, dynamic>.from(vendorJson));
-            // Ensure vendorID is set from vendor object if not already set
-            if (vendorID == null && vendor?.id != null) {
-              vendorID = vendor!.id;
-            }
-          } else {
-            // If it's not a JSON string, treat it as vendorID
-            vendorID = vendorString;
-            vendor = null;
-          }
-        } catch (e) {
-          // If JSON decode fails, treat the string as vendorID
-          print('Error decoding vendor JSON string: $e - treating as vendorID');
-          vendorID = json['vendor']?.toString();
-          vendor = null;
-        }
-      } else {
-        // vendor is not null but not Map or String - set vendorID if possible
-        vendorID = json['vendor']?.toString();
-        vendor = null;
       }
-    } else {
-      // vendor is null - vendorID should already be set from vendorID field above
-      vendor = null;
     }
-    id = json['id']?.toString();
+
+// NEW API SUPPORT
+      if (vendor == null && json['outletName'] != null) {
+        vendor = VendorModel();
+        vendor!.title = json['outletName'].toString();
+      }
+    /////id = json['id']?.toString();
+    id = json['id']?.toString() ??
+        json['orderId']?.toString();
     adminCommission = json['adminCommission']?.toString();
     couponCode = json['couponCode']?.toString();
     // Handle specialDiscount coming as Map or JSON string
@@ -188,11 +234,36 @@ class OrderModel {
       }
     }
     // Safely parse deliveryCharge (can be num, string, null)
-    deliveryCharge = _parseNum(json['deliveryCharge'])?.toString() ?? '0.0';
+    ///////deliveryCharge = _parseNum(json['deliveryCharge'])?.toString() ?? '0.0';
+    deliveryCharge =
+        _parseNum(
+          json['deliveryCharge'] ??
+              json['totalDeliveryFee'],
+        )?.toString() ??
+            '0.0';
     // Handle scheduleTime from Timestamp or milliseconds
     scheduleTime = _parseTimestamp(json['scheduleTime']);
     // Safely parse tip amount (can be num, string, null)
-    tipAmount = _parseNum(json['tip_amount'])?.toString() ?? '0.0';
+    ///////tipAmount = _parseNum(json['tip_amount'])?.toString() ?? '0.0';
+    tipAmount =
+        _parseNum(
+          json['tip_amount'] ??
+              json['tips'],
+        )?.toString() ??
+            '0.0';
+
+      //Added newly
+      pickUpDistanceInKms =
+          double.tryParse(json['pickUpDistanceInKms']?.toString() ?? '0');
+
+      deliveryDistanceInKms =
+          double.tryParse(json['deliveryDistanceInKms']?.toString() ?? '0');
+
+      pickUpCharges = _parseNum(json['pickUpCharges']);
+
+      deliverCharges = _parseNum(json['deliverCharges']);
+
+      surgeFee = _parseNum(json['surgeFee']);
     notes = json['notes'];
     // Handle author coming as Map or JSON string
     if (json['author'] != null) {

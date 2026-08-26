@@ -675,6 +675,7 @@ import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:jippydriver_driver/widget/my_separator.dart';
 import 'package:provider/provider.dart';
+import 'package:jippydriver_driver/models/driver_earning_history_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry-point
@@ -761,8 +762,8 @@ class _EarningsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final list = controller.filteredTransactions;
-
+      //final list = controller.filteredTransactions;
+      final list = controller.earningHistory;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -963,81 +964,37 @@ class _FilterRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class EarningsTile extends StatelessWidget {
-  final DriverAmountWalletTransactionModel model;
+  //final DriverAmountWalletTransactionModel model;
+  final DriverEarningHistoryModel model;
   final bool isDark;
 
   const EarningsTile({super.key, required this.model, required this.isDark});
 
   @override
+  @override
   Widget build(BuildContext context) {
-    final bool isBonus = model.bonus == true;
-    final bool isCredit = model.isCredit;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Icon ──────────────────────────────────────────────────────────
           _IconBox(
-            assetPath: isCredit
-                ? 'assets/icons/ic_credit.svg'
-                : 'assets/icons/ic_debit.svg',
+            assetPath: 'assets/icons/ic_credit.svg',
             isDark: isDark,
           ),
           const SizedBox(width: 12),
-
-          // ── Content ───────────────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bonus row — only rendered when present
-                if (isBonus) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Bonus Amount'.tr,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontFamily: AppThemeData.semiBold,
-                            color: AppThemeData.primary400,
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        child: Text(
-                          model.bonusAmount?.toString() ?? '0',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontFamily: AppThemeData.medium,
-                            color: AppThemeData.success400,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                ],
-
-                // Delivery amount row
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween, // ✅ BEST
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
-                        model.bonus != null && model.displayAmount > 0
-                            ? 'Delivery Amount (+${Constant.amountShow(amount: model.bonus.toString())} Bonus)'.tr
-                            : 'Delivery Amount'.tr,
-                        maxLines: 3,
+                        model.outletName ?? 'Restaurant',
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 15,
@@ -1050,33 +1007,30 @@ class EarningsTile extends StatelessWidget {
                     ),
                     Flexible(
                       child: Text(
-                        '${isCredit ? '+' : '-'}${Constant.amountShow(amount: model.displayAmount.toString())}',
+                        '+${Constant.amountShow(
+                          amount: (model.totalDeliveryFee ?? 0).toString(),
+                        )}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.end,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 15,
                           fontFamily: AppThemeData.medium,
-                          color: isCredit
-                              ? AppThemeData.success400
-                              : AppThemeData.danger300,
+                          color: AppThemeData.success400,
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 2),
-
-                // Date
                 Text(
-                  model.date == null
-                      ? '-'
-                      : Constant.timestampToDateTime(model.date!),
+                  model.createdAt ?? '-',
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: AppThemeData.medium,
-                    color:
-                    isDark ? AppThemeData.grey400 : AppThemeData.grey500,
+                    color: isDark
+                        ? AppThemeData.grey400
+                        : AppThemeData.grey500,
                   ),
                 ),
               ],
@@ -1086,6 +1040,158 @@ class EarningsTile extends StatelessWidget {
       ),
     );
   }
+  // Widget build(BuildContext context) {
+  //   // final bool isBonus = model.bonus == true;
+  //   // final bool isCredit = model.isCredit;
+  //
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(vertical: 6),
+  //     child: Row(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         // ── Icon ──────────────────────────────────────────────────────────
+  //         _IconBox(
+  //           assetPath: isCredit
+  //               ? 'assets/icons/ic_credit.svg'
+  //               : 'assets/icons/ic_debit.svg',
+  //           isDark: isDark,
+  //         ),
+  //         const SizedBox(width: 12),
+  //
+  //         // ── Content ───────────────────────────────────────────────────────
+  //         Expanded(
+  //           child: Column(
+  //             crossAxisAlignment: CrossAxisAlignment.start,
+  //             children: [
+                // Bonus row — only rendered when present
+                // if (isBonus) ...[
+                //   Row(
+                //     crossAxisAlignment: CrossAxisAlignment.start,
+                //     children: [
+                //       Expanded(
+                //         child: Text(
+                //           'Bonus Amount'.tr,
+                //           maxLines: 2,
+                //           overflow: TextOverflow.ellipsis,
+                //           style: const TextStyle(
+                //             fontSize: 14,
+                //             fontFamily: AppThemeData.semiBold,
+                //             color: AppThemeData.primary400,
+                //           ),
+                //         ),
+                //       ),
+                //       Flexible(
+                //         child: Text(
+                //           model.bonusAmount?.toString() ?? '0',
+                //           maxLines: 1,
+                //           overflow: TextOverflow.ellipsis,
+                //           textAlign: TextAlign.end,
+                //           style: const TextStyle(
+                //             fontSize: 14,
+                //             fontFamily: AppThemeData.medium,
+                //             color: AppThemeData.success400,
+                //           ),
+                //         ),
+                //       ),
+                //     ],
+                //   ),
+                //   const SizedBox(height: 2),
+                // ],
+
+                // Delivery amount row
+                // Row(
+                //   mainAxisAlignment: MainAxisAlignment.spaceBetween, // ✅ BEST
+                //   crossAxisAlignment: CrossAxisAlignment.start,
+                //   children: [
+                //     Expanded(
+                //       child: Text(
+                //         model.bonus != null && model.displayAmount > 0
+                //             ? 'Delivery Amount (+${Constant.amountShow(amount: model.bonus.toString())} Bonus)'.tr
+                //             : 'Delivery Amount'.tr,
+                //         maxLines: 3,
+                //         overflow: TextOverflow.ellipsis,
+                //         style: TextStyle(
+                //           fontSize: 15,
+                //           fontFamily: AppThemeData.semiBold,
+                //           color: isDark
+                //               ? AppThemeData.grey100
+                //               : AppThemeData.grey800,
+                //         ),
+                //       ),
+                //     ),
+                //     Flexible(
+                //       child: Text(
+                //         '${isCredit ? '+' : '-'}${Constant.amountShow(amount: model.displayAmount.toString())}',
+                //         maxLines: 1,
+                //         overflow: TextOverflow.ellipsis,
+                //         textAlign: TextAlign.end,
+                //         style: TextStyle(
+                //           fontSize: 15,
+                //           fontFamily: AppThemeData.medium,
+                //           color: isCredit
+                //               ? AppThemeData.success400
+                //               : AppThemeData.danger300,
+                //         ),
+                //       ),
+                //     ),
+                //   ],
+                // ),
+                // const SizedBox(height: 2),
+
+  //
+  //       Row(
+  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //         crossAxisAlignment: CrossAxisAlignment.start,
+  //         children: [
+  //           Expanded(
+  //             child: Text(
+  //               model.outletName ?? 'Restaurant',
+  //               maxLines: 2,
+  //               overflow: TextOverflow.ellipsis,
+  //               style: TextStyle(
+  //                 fontSize: 15,
+  //                 fontFamily: AppThemeData.semiBold,
+  //                 color: isDark
+  //                     ? AppThemeData.grey100
+  //                     : AppThemeData.grey800,
+  //               ),
+  //             ),
+  //           ),
+  //           Flexible(
+  //             child: Text(
+  //               '+${Constant.amountShow(amount: (model.totalDeliveryFee ?? 0).toString())}',
+  //               maxLines: 1,
+  //               overflow: TextOverflow.ellipsis,
+  //               textAlign: TextAlign.end,
+  //               style: const TextStyle(
+  //                 fontSize: 15,
+  //                 fontFamily: AppThemeData.medium,
+  //                 color: AppThemeData.success400,
+  //               ),
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //               // Date
+  //               Text(
+  //                 // model.date == null
+  //                 //     ? '-'
+  //                 //     : Constant.timestampToDateTime(model.date!),
+  //                 model.createdAt ?? '-'
+  //                 style: TextStyle(
+  //                   fontSize: 12,
+  //                   fontFamily: AppThemeData.medium,
+  //                   color:
+  //                   isDark ? AppThemeData.grey400 : AppThemeData.grey500,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

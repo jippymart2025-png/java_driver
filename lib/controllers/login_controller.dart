@@ -148,11 +148,23 @@ class LoginController extends GetxController {
   }
 
   Future<void> loginWithEmailAndPassword() async {
+    // ShowToastDialog.showToast(
+    //     "login temporarily disabled"
+    // );
+    // return;
     ShowToastDialog.showLoader('Please wait'.tr);
     try {
       final response = await http.post(
         Uri.parse('${Constant.baseUrl}driver/login'),
-        headers: const {'Content-Type': 'application/json'},
+        //Uri.parse('http://187.127.156.147:8084/api/fm/auth/login'),
+        headers:
+        {
+          //const {'Content-Type': 'application/json'},
+          'Content-Type': 'application/json',
+        'accept': '*/*',
+        //'Authorization':
+        //'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODg0MzYsImV4cCI6MTc4MTY3NDgzNn0.vej38x22jMXmgGpi8McNp6tmVr_P3YPROeYyfSR4jJY',
+          },
         body: json.encode({
           'email': emailEditingController.value.text.trim(),
           'password': passwordEditingController.value.text.trim(),

@@ -22,7 +22,7 @@ class OrdersReportResponse {
           .map((e) => OrderModel.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
       earnings: json['earnings'] is Map<String, dynamic>
-          ? OrdersReportEarnings.fromJson(json['earnings'])
+          ?  OrdersReportEarnings.fromJson(json['earnings'])
           : null,
       pagination: json['pagination'] is Map<String, dynamic>
           ? OrdersReportPagination.fromJson(json['pagination'])

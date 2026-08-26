@@ -596,6 +596,7 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
     try {
       final res = await http.get(
         Uri.parse('${Constant.baseUrl}update-driver-order'),
+        //Uri.parse('http://187.127.156.147:8084/api/driver/fetchEarnings?driverId=1&date=29%2F05%2F2026'),
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 15));
 

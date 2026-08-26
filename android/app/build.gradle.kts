@@ -40,18 +40,50 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
+
+
+
+//            signingConfigs {
+//                create("release") {
+
+                    // keyAlias = keystoreProperties["keyAlias"] as String
+                    // keyPassword = keystoreProperties["keyPassword"] as String
+                    // storeFile = file(keystoreProperties["storeFile"] as String
+                    // storePassword = keystoreProperties["storePassword"] as String
+
+//                    keyAlias = keystoreProperties["keyAlias"]?.toString() ?: ""
+//                    keyPassword = keystoreProperties["keyPassword"]?.toString() ?: ""
+//                    storeFile = file(keystoreProperties["storeFile"]?.toString() ?: "")
+//                    storePassword = keystoreProperties["storePassword"]?.toString() ?: ""
+//                }
+//            }
+
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+
+            if (keystorePropertiesFile.exists()) {
+
+                keyAlias = keystoreProperties["keyAlias"]?.toString()
+                keyPassword = keystoreProperties["keyPassword"]?.toString()
+
+                val storeFilePath = keystoreProperties["storeFile"]?.toString()
+
+                if (storeFilePath != null) {
+                    storeFile = file(storeFilePath)
+                }
+
+                storePassword = keystoreProperties["storePassword"]?.toString()
+            }
         }
     }
 
+
+
+
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            // signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
