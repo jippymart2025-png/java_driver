@@ -281,6 +281,13 @@ class _DashboardHeader extends StatelessWidget {
     final double earnings = ctrl.totalEarnings.value;
     final double tips = ctrl.totalTips.value;
 
+     /////ADDED NOW
+    print("Dashboard earnings => $earnings");
+    print("Dashboard tips => $tips");
+    print("Dashboard totalOrders => $total");
+    print("Dashboard delivered => $delivered");
+    //////ADDED NOW
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -840,60 +847,65 @@ class _OrderCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CARD HEADER
-// ─────────────────────────────────────────────────────────────────────────────
+//  ==========================================================================================
+//                   CARD HEADER: vendor + order id + date + earnings + chevron
+//  ==========================================================================================
 class _CardHeader extends StatelessWidget {
   const _CardHeader({
     required this.order,
     required this.isExpanded,
     required this.isDark,
   });
-  final OrderModel order;
-  final bool isExpanded, isDark;
 
-  Color get _sub => isDark ? const Color(0xFF7E8499) : const Color(0xFF6B7280);
+  final OrderModel order;
+  final bool isExpanded;
+  final bool isDark;
+
+  Color get _sub =>
+      isDark ? const Color(0xFF7E8499) : const Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Icon box
         Container(
           width: 40,
           height: 46,
           decoration: BoxDecoration(
-            color: AppThemeData.secondary300.withOpacity(0.10),
+            color: AppThemeData.secondary300.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(13),
           ),
           child: Center(
-            child: SvgPicture.asset('assets/icons/ic_building.svg',
-                width: 22,
-                height: 22,
-                colorFilter: const ColorFilter.mode(
-                    AppThemeData.secondary300, BlendMode.srcIn)),
+            child: SvgPicture.asset(
+              'assets/icons/ic_building.svg',
+              width: 22,
+              height: 22,
+              colorFilter: const ColorFilter.mode(
+                AppThemeData.secondary300,
+                BlendMode.srcIn,
+              ),
+            ),
           ),
         ),
+
         const SizedBox(width: 12),
 
-        // Vendor + order id + status
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 order.vendor?.title ?? 'Restaurant',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: AppThemeData.semiBold,
                   fontSize: 14,
                   color: isDark
                       ? const Color(0xFFF0F2F8)
                       : const Color(0xFF111827),
-                  letterSpacing: -0.1,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 5),
               Row(
@@ -901,9 +913,9 @@ class _CardHeader extends StatelessWidget {
                   Text(
                     Constant.orderId(orderId: order.id.toString()),
                     style: TextStyle(
-                        fontFamily: AppThemeData.regular,
-                        fontSize: 11,
-                        color: _sub),
+                      fontSize: 11,
+                      color: _sub,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   _StatusChip(status: order.status ?? ''),
@@ -915,36 +927,61 @@ class _CardHeader extends StatelessWidget {
 
         const SizedBox(width: 8),
 
-        // Date + chevron
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              Constant.timestampToDateTime(order.createdAt ?? Timestamp.now()),
+              Constant.timestampToDateTime(
+                  order.createdAt ?? Timestamp.now()),
               style: TextStyle(
-                  fontFamily: AppThemeData.regular,
-                  fontSize: 10,
-                  color: _sub),
+                fontSize: 10,
+                color: _sub,
+              ),
             ),
             const SizedBox(height: 6),
-            AnimatedRotation(
-              turns: isExpanded ? 0.5 : 0,
-              duration: const Duration(milliseconds: 300),
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : const Color(0xFFF0F1F5),
-                  borderRadius: BorderRadius.circular(8),
+
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFFAF1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFB8E6BE)),
+                  ),
+                  child: Text(
+                    'Total Earnings ${Constant.amountShow(amount: order.deliveryCharge ?? '0')}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF34C759),
+                    ),
+                  ),
                 ),
-                child: Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 18,
-                  color: isExpanded ? AppThemeData.secondary300 : _sub,
+                const SizedBox(width: 8),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : const Color(0xFFF0F1F5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color:
+                      isExpanded ? AppThemeData.secondary300 : _sub,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),
@@ -954,10 +991,267 @@ class _CardHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CARD HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+// class _CardHeader extends StatelessWidget {
+//   const _CardHeader({
+//     required this.order,
+//     required this.isExpanded,
+//     required this.isDark,
+//   });
+//   final OrderModel order;
+//   final bool isExpanded, isDark;
+//
+//   Color get _sub => isDark ? const Color(0xFF7E8499) : const Color(0xFF6B7280);
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Row(
+//       crossAxisAlignment: CrossAxisAlignment.center,
+//       children: [
+//         // Icon box
+//         Container(
+//           width: 40,
+//           height: 46,
+//           decoration: BoxDecoration(
+//             color: AppThemeData.secondary300.withOpacity(0.10),
+//             borderRadius: BorderRadius.circular(13),
+//           ),
+//           child: Center(
+//             child: SvgPicture.asset('assets/icons/ic_building.svg',
+//                 width: 22,
+//                 height: 22,
+//                 colorFilter: const ColorFilter.mode(
+//                     AppThemeData.secondary300, BlendMode.srcIn)),
+//           ),
+//         ),
+//         const SizedBox(width: 12),
+//
+//         // Vendor + order id + status
+//         Expanded(
+//           child: Column(
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               Text(
+//                 order.vendor?.title ?? 'Restaurant',
+//                 style: TextStyle(
+//                   fontFamily: AppThemeData.semiBold,
+//                   fontSize: 14,
+//                   color: isDark
+//                       ? const Color(0xFFF0F2F8)
+//                       : const Color(0xFF111827),
+//                   letterSpacing: -0.1,
+//                 ),
+//                 maxLines: 1,
+//                 overflow: TextOverflow.ellipsis,
+//               ),
+//               const SizedBox(height: 5),
+//               Row(
+//                 children: [
+//                   Text(
+//                     Constant.orderId(orderId: order.id.toString()),
+//                     style: TextStyle(
+//                         fontFamily: AppThemeData.regular,
+//                         fontSize: 11,
+//                         color: _sub),
+//                   ),
+//                   const SizedBox(width: 4),
+//                   _StatusChip(status: order.status ?? ''),
+//                 ],
+//               ),
+//             ],
+//           ),
+//         ),
+//
+//         const SizedBox(width: 8),
+
+        //--------------------------------------------
+        // Date + chevron
+        //--------------------------------------------
+        //    Column(
+        //         crossAxisAlignment: CrossAxisAlignment.end,
+        //         children: [
+        //       Text(
+        //           Constant.timestampToDateTime(order.createdAt ?? Timestamp.now()),
+        //           style: TextStyle(
+        //           fontFamily: AppThemeData.regular,
+        //           fontSize: 10,
+        //           color: _sub,
+        //         ),
+        //        ),
+        //
+        //      const SizedBox(height: 6),
+        //     // AnimatedRotation(
+        //     //   turns: isExpanded ? 0.5 : 0,
+        //     //   duration: const Duration(milliseconds: 300),
+            //   child: Container(
+            //     width: 26,
+            //     height: 26,
+            //     decoration: BoxDecoration(
+            //       color: isDark
+            //           ? Colors.white.withOpacity(0.06)
+            //           : const Color(0xFFF0F1F5),
+            //       borderRadius: BorderRadius.circular(8),
+            //     ),
+            //     child: Icon(
+            //       Icons.keyboard_arrow_down_rounded,
+            //       size: 18,
+            //       color: isExpanded ? AppThemeData.secondary300 : _sub,
+            //     ),
+            //   ),
+            // ),
+            // Column(
+            //   crossAxisAlignment: CrossAxisAlignment.end,
+            //   children: [
+            //     Text(
+            //       Constant.timestampToDateTime(
+            //         order.createdAt ?? Timestamp.now(),
+            //       ),
+            //       style: TextStyle(
+            //         fontFamily: AppThemeData.regular,
+            //         fontSize: 10,
+            //         color: _sub,
+            //       ),
+            //     ),
+            //
+            //     const SizedBox(height: 6),
+
+                // Row(
+                //   mainAxisSize: MainAxisSize.min,
+                //   children: [
+                //     Container(
+                //       padding: const EdgeInsets.symmetric(
+                //         horizontal: 8,
+                //         vertical: 4,
+                //       ),
+                //       decoration: BoxDecoration(
+                //         color: const Color(0xFFEFFAF1),
+                //         borderRadius: BorderRadius.circular(16),
+                //         border: Border.all(
+                //           color: const Color(0xFFB8E6BE),
+                //         ),
+                //       ),
+                //       child: Text(
+                //         'Earned ${Constant.amountShow(amount: order.deliveryCharge ?? '0')}',
+                //         style: const TextStyle(
+                //           fontSize: 11,
+                //           fontWeight: FontWeight.w600,
+                //           color: Color(0xFF34C759),
+                //         ),
+                //       ),
+                //     ),
+                //
+                //     const SizedBox(width: 8),
+                //
+                //     AnimatedRotation(
+                //       turns: isExpanded ? 0.5 : 0,
+                //       duration: const Duration(milliseconds: 300),
+                //       child: Container(
+                //         width: 26,
+                //         height: 26,
+                //         decoration: BoxDecoration(
+                //           color: isDark
+                //               ? Colors.white.withOpacity(0.06)
+                //               : const Color(0xFFF0F1F5),
+                //           borderRadius: BorderRadius.circular(8),
+                //         ),
+//                         child: Icon(
+//                           Icons.keyboard_arrow_down_rounded,
+//                           size: 18,
+//                           color: isExpanded
+//                               ? AppThemeData.secondary300
+//                               : _sub,
+//                         ),
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//
+//
+//           ],
+//
+//
+//     );
+//   }
+// }
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EXPANDED BODY
 // ─────────────────────────────────────────────────────────────────────────────
+// class _ExpandedBody extends StatelessWidget {
+//   const _ExpandedBody({required this.order, required this.isDark});
+//   final OrderModel order;
+//   final bool isDark;
+//
+//   Color get _divider =>
+//       isDark ? const Color(0xFF2A2F3E) : const Color(0xFFF0F1F5);
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     // final double deliveryCharge =
+//     //     (double.tryParse(order.calculatedCharges?['totalCalculatedCharge']
+//     //         ?.toString()
+//     //         .trim() ??
+//     //         '0') ??
+//     //         0) -
+//     //         (double.tryParse(order.tipAmount?.toString().trim() ?? '0') ?? 0);
+//     final double deliveryCharge =
+//         (order.pickUpCharges ?? 0).toDouble() +
+//             (order.deliverCharges ?? 0).toDouble() +
+//             (order.surgeFee ?? 0).toDouble();
+//
+//     final bool hasTip = order.tipAmount != null &&
+//         order.tipAmount!.isNotEmpty &&
+//         (double.tryParse(order.tipAmount.toString()) ?? 0) > 0;
+//
+//     final bool showDeliveryCharge =
+//         Constant.userModel?.vendorID?.isEmpty == true;
+//
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         const SizedBox(height: 14),
+//         Divider(color: _divider, height: 1, thickness: 1),
+//         const SizedBox(height: 14),
+//
+//         // Route timeline
+//         _RouteTimeline(order: order, isDark: isDark),
+//
+//         // Charges
+//         if (showDeliveryCharge || hasTip) ...[
+//           const SizedBox(height: 12),
+//           Divider(color: _divider, height: 1, thickness: 1),
+//           const SizedBox(height: 12),
+//           if (showDeliveryCharge)
+//             _ChargeRow(
+//               label: 'Delivery Charge'.tr,
+//               value: Constant.amountShow(
+//                   amount: deliveryCharge.toStringAsFixed(2)),
+//               isDark: isDark,
+//             ),
+//           if (hasTip) ...[
+//             const SizedBox(height: 6),
+//             _ChargeRow(
+//               label: 'Tips'.tr,
+//               value: Constant.amountShow(amount: order.tipAmount),
+//               isDark: isDark,
+//               valueColor: const Color(0xFF2ED07A),
+//               showTipBadge: true,
+//             ),
+//           ],
+//           const SizedBox(height: 4),
+//         ],
+//       ],
+//     );
+//   }
+// }
+
 class _ExpandedBody extends StatelessWidget {
-  const _ExpandedBody({required this.order, required this.isDark});
+  const _ExpandedBody({
+    required this.order,
+    required this.isDark,
+  });
+
   final OrderModel order;
   final bool isDark;
 
@@ -966,59 +1260,105 @@ class _ExpandedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double pickupCharge =
+    (order.pickUpCharges ?? 0).toDouble();
+
     final double deliveryCharge =
-        (double.tryParse(order.calculatedCharges?['totalCalculatedCharge']
-            ?.toString()
-            .trim() ??
-            '0') ??
-            0) -
-            (double.tryParse(order.tipAmount?.toString().trim() ?? '0') ?? 0);
+    (order.deliverCharges ?? 0).toDouble();
 
-    final bool hasTip = order.tipAmount != null &&
-        order.tipAmount!.isNotEmpty &&
-        (double.tryParse(order.tipAmount.toString()) ?? 0) > 0;
+    final double surgeFee =
+    (order.surgeFee ?? 0).toDouble();
 
-    final bool showDeliveryCharge =
-        Constant.userModel?.vendorID?.isEmpty == true;
+    final double tip =
+        double.tryParse(order.tipAmount?.toString() ?? '0') ?? 0;
+
+    final bool showPickup = pickupCharge > 0;
+    final bool showDelivery = deliveryCharge > 0;
+    final bool showSurge = surgeFee > 0;
+    final bool showTip = tip > 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 14),
-        Divider(color: _divider, height: 1, thickness: 1),
+        Divider(
+          color: _divider,
+          height: 1,
+          thickness: 1,
+        ),
         const SizedBox(height: 14),
 
-        // Route timeline
-        _RouteTimeline(order: order, isDark: isDark),
+        // Route Timeline
+        _RouteTimeline(
+          order: order,
+          isDark: isDark,
+        ),
 
-        // Charges
-        if (showDeliveryCharge || hasTip) ...[
+        // Charges Section
+        if (showPickup ||
+            showDelivery ||
+            showSurge ||
+            showTip) ...[
           const SizedBox(height: 12),
-          Divider(color: _divider, height: 1, thickness: 1),
+          Divider(
+            color: _divider,
+            height: 1,
+            thickness: 1,
+          ),
           const SizedBox(height: 12),
-          if (showDeliveryCharge)
+
+          if (showPickup)
+            _ChargeRow(
+              label: 'Pickup Charge'.tr,
+              value: Constant.amountShow(
+                amount: pickupCharge.toStringAsFixed(2),
+              ),
+              isDark: isDark,
+            ),
+
+          if (showDelivery) ...[
+            const SizedBox(height: 6),
             _ChargeRow(
               label: 'Delivery Charge'.tr,
               value: Constant.amountShow(
-                  amount: deliveryCharge.toStringAsFixed(2)),
+                amount: deliveryCharge.toStringAsFixed(2),
+              ),
               isDark: isDark,
             ),
-          if (hasTip) ...[
+          ],
+
+          if (showSurge) ...[
+            const SizedBox(height: 6),
+            _ChargeRow(
+              label: 'Surge Fee'.tr,
+              value: Constant.amountShow(
+                amount: surgeFee.toStringAsFixed(2),
+              ),
+              isDark: isDark,
+              valueColor: Colors.orange,
+            ),
+          ],
+
+          if (showTip) ...[
             const SizedBox(height: 6),
             _ChargeRow(
               label: 'Tips'.tr,
-              value: Constant.amountShow(amount: order.tipAmount),
+              value: Constant.amountShow(
+                amount: tip.toStringAsFixed(2),
+              ),
               isDark: isDark,
               valueColor: const Color(0xFF2ED07A),
               showTipBadge: true,
             ),
           ],
+
           const SizedBox(height: 4),
         ],
       ],
     );
   }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROUTE TIMELINE
@@ -1057,22 +1397,20 @@ class _RouteTimeline extends StatelessWidget {
           color: _sub.withOpacity(0.35),
           gap: 4,
         ),
-        contentsBuilder: (_, i) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: i == 0
-              ? _TlContent(
-            title: order.vendor?.title ?? 'Restaurant',
-            subtitle:
-            order.vendor?.location ?? 'Location not available',
-            isDark: isDark,
-          )
-              : _TlContent(
-            title: 'Deliver to'.tr,
-            subtitle: order.address?.getFullAddress() ??
-                'Address not available',
-            isDark: isDark,
+          contentsBuilder: (_, i) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: i == 0
+                ? _TlContent(
+              title: 'Pickup Distance',
+              subtitle: '${order.pickUpDistanceInKms} km',
+              isDark: isDark,
+            )
+                : _TlContent(
+              title: 'Delivery Distance',
+              subtitle: '${order.deliveryDistanceInKms} km',
+              isDark: isDark,
+            ),
           ),
-        ),
       ),
     );
   }
@@ -1189,27 +1527,90 @@ class _ChargeRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // STATUS CHIP
 // ─────────────────────────────────────────────────────────────────────────────
+// class _StatusChip extends StatelessWidget {
+//   const _StatusChip({required this.status});
+//   final String status;
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     final color = Constant.statusColor(status: status);
+//     return Container(
+//       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+//       decoration: BoxDecoration(
+//         color: color.withOpacity(0.10),
+//         borderRadius: BorderRadius.circular(20),
+//         border: Border.all(color: color.withOpacity(0.25), width: 0.8),
+//       ),
+//       child: Text(
+//         status,
+//         style: TextStyle(
+//             fontFamily: AppThemeData.semiBold,
+//             fontSize: 9,
+//             color: color,
+//             letterSpacing: 0.1),
+//       ),
+//     );
+//   }
+// }
+
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status});
   final String status;
 
   @override
   Widget build(BuildContext context) {
-    final color = Constant.statusColor(status: status);
+    final s = status.toUpperCase();
+
+    Color color;
+
+    if (s.contains('DELIVERED')) {
+      color = Colors.green;
+    } else if (s.contains('REJECTED')) {
+      color = Colors.red;
+    } else if (s.contains('PENDING')) {
+      color = Colors.orange;
+    } else if (s.contains('ACCEPTED')) {
+      color = Colors.blue;
+    } else {
+      color = Colors.grey;
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.25), width: 0.8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 4,
       ),
-      child: Text(
-        status,
-        style: TextStyle(
-            fontFamily: AppThemeData.semiBold,
-            fontSize: 9,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(0.35),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            s.contains('DELIVERED')
+                ? Icons.check_circle
+                : s.contains('REJECTED')
+                ? Icons.cancel
+                : Icons.radio_button_checked,
+            size: 12,
             color: color,
-            letterSpacing: 0.1),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            s,
+            style: TextStyle(
+              fontFamily: AppThemeData.bold,
+              fontSize: 10,
+              color: color,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }

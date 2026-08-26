@@ -304,12 +304,16 @@ import 'package:jippydriver_driver/app/auth_screen/login_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
-import 'package:jippydriver_driver/models/zone_model.dart';
+//import 'package:jippydriver_driver/models/zone_model.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
+import 'dart:async';
+import '../models/state_model.dart';
+import 'package:jippydriver_driver/models/city_model.dart';
+import 'package:jippydriver_driver/models/area_model.dart';
+import 'package:jippydriver_driver/app/dash_board_screen/dash_board_screen.dart';
 /// OPTIMIZATIONS:
 /// 1. validateAndSignup() — all validation lives in the controller, not the view.
 /// 2. signUpWithEmailAndPassword: unified null-safety with ?. and ?? operators.
@@ -327,13 +331,52 @@ class SignupController extends GetxController {
   final passwordEditingController = TextEditingController().obs;
   final conformPasswordEditingController = TextEditingController().obs;
 
+  final nomineeNameEditingController =
+      TextEditingController().obs;
+
+  final nomineePhoneEditingController =
+      TextEditingController().obs;
+
+  final familyMemberNameEditingController =
+      TextEditingController().obs;
+
+  final familyMemberPhoneEditingController =
+      TextEditingController().obs;
+
+  final aadharNumberEditingController =
+      TextEditingController().obs;
+
+  final drivingLicenseEditingController =
+      TextEditingController().obs;
+
+  final rcNumberEditingController =
+      TextEditingController().obs;
+
+  final buildingNumberEditingController =
+      TextEditingController().obs;
+
+  final roadEditingController =
+      TextEditingController().obs;
+
+  final landmarkEditingController =
+      TextEditingController().obs;
+
   final passwordVisible = true.obs;
   final conformPasswordVisible = true.obs;
   final type = ''.obs;
   final userModel = UserModel().obs;
-  final zoneList = <ZoneModel>[].obs;
-  final selectedZone = ZoneModel().obs;
+  //final zoneList = <ZoneModel>[].obs;
+  //final selectedZone = ZoneModel().obs;
+final stateList = <StateModel>[].obs;
+final selectedState = Rxn<StateModel>();
+  final selectedCityId = RxnInt();
+  RxList<CityModel> cityList = <CityModel>[].obs;
 
+  Rx<CityModel?> selectedCity = Rx<CityModel?>(null);
+  final selectedAreaId = RxnInt();
+  RxList<AreaModel> areaList = <AreaModel>[].obs;
+
+  Rx<AreaModel?> selectedArea = Rx<AreaModel?>(null);
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void onInit() {
@@ -347,16 +390,26 @@ class SignupController extends GetxController {
     lastNameEditingController.value.dispose();
     emailEditingController.value.dispose();
     phoneNUmberEditingController.value.dispose();
-    countryCodeEditingController.value.dispose();
+    //countryCodeEditingController.value.dispose();
     passwordEditingController.value.dispose();
-    conformPasswordEditingController.value.dispose();
+    nomineeNameEditingController.value.dispose();
+    nomineePhoneEditingController.value.dispose();
+    familyMemberNameEditingController.value.dispose();
+    familyMemberPhoneEditingController.value.dispose();
+    aadharNumberEditingController.value.dispose();
+    drivingLicenseEditingController.value.dispose();
+    rcNumberEditingController.value.dispose();
+    buildingNumberEditingController.value.dispose();
+    roadEditingController.value.dispose();
+    landmarkEditingController.value.dispose();
+    //conformPasswordEditingController.value.dispose();
     super.onClose();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
   /// Called by the UI. All validation lives here — view stays dumb.
-  void validateAndSignup() {
+  Future<void> validateAndSignup() async {
     final isThirdParty = type.value == 'google' ||
         type.value == 'apple' ||
         type.value == 'mobileNumber';
@@ -367,6 +420,18 @@ class SignupController extends GetxController {
     final phone = phoneNUmberEditingController.value.text.trim();
     final password = passwordEditingController.value.text.trim();
     final confirmPassword = conformPasswordEditingController.value.text.trim();
+    final fcmToken = await NotificationService.getToken();
+
+    final body = {
+    'type': 'email',
+    'first_name': firstName,
+    'last_name': lastName,
+    'email': email,
+    'password': password,
+    'phone_number': phone,
+    'fcm_token': fcmToken,
+    'app_identifier': Platform.isAndroid ? 'android' : 'ios',
+      };
 
     if (firstName.isEmpty) {
       ShowToastDialog.showToast('Please enter first name'.tr);
@@ -376,7 +441,12 @@ class SignupController extends GetxController {
       ShowToastDialog.showToast('Please enter last name'.tr);
       return;
     }
-    if (email.isEmpty || !GetUtils.isEmail(email)) {
+    if (email.isEmpty) {
+      ShowToastDialog.showToast('Please enter email address'.tr);
+      return;
+    }
+
+    if (!GetUtils.isEmail(email)) {
       ShowToastDialog.showToast('Please enter a valid email'.tr);
       return;
     }
@@ -384,26 +454,176 @@ class SignupController extends GetxController {
       ShowToastDialog.showToast('Please enter phone number'.tr);
       return;
     }
+
+    if (phone.length != 10) {
+      ShowToastDialog.showToast('Phone number must be 10 digits'.tr);
+      return;
+    }
+
+    final nomineeName =
+    nomineeNameEditingController.value.text.trim();
+
+    if (nomineeName.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter nominee name'.tr,
+      );
+      return;
+    }
+
+    final nomineePhone =
+    nomineePhoneEditingController.value.text.trim();
+
+    if (nomineePhone.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter nominee phone number'.tr,
+      );
+      return;
+    }
+    final familyMemberName =
+    familyMemberNameEditingController.value.text.trim();
+
+    if (familyMemberName.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter family member name'.tr,
+      );
+      return;
+    }
+
+    final familyMemberPhone =
+    familyMemberPhoneEditingController.value.text.trim();
+
+    if (familyMemberPhone.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter family member phone number'.tr,
+      );
+      return;
+    }
+
+    if (familyMemberPhone.length != 10) {
+      ShowToastDialog.showToast(
+        'Family member phone number must be 10 digits'.tr,
+      );
+      return;
+    }
+
+    if (nomineePhone.length != 10) {
+      ShowToastDialog.showToast(
+        'Nominee phone number must be 10 digits'.tr,
+      );
+      return;
+    }
+
+    final aadharNumber =
+    aadharNumberEditingController.value.text.trim();
+
+    if (aadharNumber.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter Aadhaar number'.tr,
+      );
+      return;
+    }
+
+    if (aadharNumber.length != 12) {
+      ShowToastDialog.showToast(
+        'Aadhaar number must be 12 digits'.tr,
+      );
+      return;
+    }
+
+    final drivingLicense =
+    drivingLicenseEditingController.value.text.trim();
+
+    if (drivingLicense.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter driving license number'.tr,
+      );
+      return;
+    }
+
+    final rcNumber =
+    rcNumberEditingController.value.text.trim();
+
+    if (rcNumber.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter RC number'.tr,
+      );
+      return;
+    }
+
+    final buildingNumber =
+    buildingNumberEditingController.value.text.trim();
+
+    if (buildingNumber.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter building number'.tr,
+      );
+      return;
+    }
+    final road =
+    roadEditingController.value.text.trim();
+
+    if (road.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter road'.tr,
+      );
+      return;
+    }
+    final landmark =
+    landmarkEditingController.value.text.trim();
+
+    if (landmark.isEmpty) {
+      ShowToastDialog.showToast(
+        'Please enter landmark'.tr,
+      );
+      return;
+    }
+    if (selectedState.value == null) {
+      ShowToastDialog.showToast(
+        'Please select state'.tr,
+      );
+      return;
+    }
+    if (selectedCity.value == null) {
+      ShowToastDialog.showToast(
+        'Please select city'.tr,
+      );
+      return;
+    }
+    if (selectedArea.value == null) {
+      ShowToastDialog.showToast(
+        'Please select area'.tr,
+      );
+      return;
+    }
     if (!isThirdParty) {
       if (password.isEmpty) {
         ShowToastDialog.showToast('Please enter password'.tr);
         return;
       }
+
+      final passwordRegex = RegExp(
+        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&+=!]).{8,20}$',
+      );
+
+      if (!passwordRegex.hasMatch(password)) {
+        ShowToastDialog.showToast(
+          'Password must contain uppercase, lowercase, number and special character'.tr,
+        );
+        return;
+      }
+
       if (confirmPassword.isEmpty) {
         ShowToastDialog.showToast('Please enter confirm password'.tr);
         return;
       }
+
       if (password != confirmPassword) {
         ShowToastDialog.showToast(
-            "Password and Confirm password don't match".tr);
+          "Please make sure your passwords match".tr,
+        );
         return;
       }
     }
-    if (selectedZone.value.id == null) {
-      ShowToastDialog.showToast('Please select zone'.tr);
-      return;
-    }
-
     signUpWithEmailAndPassword();
   }
 
@@ -437,13 +657,107 @@ class SignupController extends GetxController {
       countryCodeEditingController.value.text = '+91';
     }
 
+    // try {
+    //   final zones = await FireStoreUtils.getZone();
+    //   zoneList.value = zones ?? [];
+    //   log('Loaded ${zoneList.length} zones');
+    // } catch (e) {
+    //   log('Error loading zones: $e');
+    //   zoneList.value = [];
+    // }
+    await fetchStates();
+  }
+
+  Future<void> fetchStates() async {
     try {
-      final zones = await FireStoreUtils.getZone();
-      zoneList.value = zones ?? [];
-      log('Loaded ${zoneList.length} zones');
+      final response = await http.get(
+        Uri.parse(
+          'http://srv1617582.hstgr.cloud:8084/api/fm/location/fetchStates',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization':
+          'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODY0MTMsImV4cCI6MTc4MTY3MjgxM30.sHWQluvVGftqneDye532r8bXDDqYJmep_fFrSS_1-V8',
+        },
+      );
+
+      //log('States Response: ${response.body}');
+      print('Status Code: ${response.statusCode}');
+      print('States Response: ${response.body}');
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+
+        stateList.value =
+            data.map((e) => StateModel.fromJson(e)).toList();
+
+        log('Loaded ${stateList.length} states');
+
+      }
     } catch (e) {
-      log('Error loading zones: $e');
-      zoneList.value = [];
+      log('Error fetching states: $e');
+    }
+  }
+  //--------FETCH CITIES---------
+  Future<void> fetchCities(int stateId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          'http://srv1617582.hstgr.cloud:8084/api/fm/location/fetchCityInState?stateId=$stateId',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODY0MTMsImV4cCI6MTc4MTY3MjgxM30.sHWQluvVGftqneDye532r8bXDDqYJmep_fFrSS_1-V8' ,
+        },
+      );
+
+      print('City Status Code: ${response.statusCode}');
+      print('City Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+
+        cityList.value =
+            data.map((e) => CityModel.fromJson(e)).toList();
+
+        selectedCity.value = null; // ADD THIS LINE
+
+        print('Loaded ${cityList.length} cities');
+      }
+    } catch (e) {
+      print('City Error: $e');
+    }
+  }
+
+  //---------FETCH AREAS------------
+  Future<void> fetchAreas(int cityId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          'http://srv1617582.hstgr.cloud:8084/api/fm/location/fetchAreaInCity?cityId=$cityId',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODY0MTMsImV4cCI6MTc4MTY3MjgxM30.sHWQluvVGftqneDye532r8bXDDqYJmep_fFrSS_1-V8',
+        },
+      );
+
+      print('Area Status Code: ${response.statusCode}');
+      print('Area Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+
+        areaList.value =
+            data.map((e) => AreaModel.fromJson(e)).toList();
+        selectedArea.value = null;
+
+        print('Loaded ${areaList.length} areas');
+      }
+    } catch (e) {
+      print('Area Error: $e');
     }
   }
 
@@ -462,77 +776,187 @@ class SignupController extends GetxController {
       ..isDocumentVerify = Constant.isDriverVerification != true
       ..countryCode = countryCodeEditingController.value.text
       ..createdAt = Timestamp.now()
-      ..zoneId = selectedZone.value.id
+      //..createdAt = DateTime.now()
+      //..zoneId = selectedZone.value.id
       ..appIdentifier = Platform.isAndroid ? 'android' : 'ios'
       ..provider = provider ?? userModel.value.provider;
   }
 
   Future<void> signUpWithEmailAndPassword() async {
+
+    ShowToastDialog.showToast(
+        "Signup temporarily disabled"
+    );
+    return;
     ShowToastDialog.showLoader('Please wait'.tr);
 
     try {
-      final isThirdParty = type.value == 'google' ||
-          type.value == 'apple' ||
-          type.value == 'mobileNumber';
+      final isThirdParty =
+          type.value == 'google' ||
+              type.value == 'apple' ||
+              type.value == 'mobileNumber';
 
       if (isThirdParty) {
         await _buildUserModel();
+
+        final updated =
         await _updateUserWithoutIsActive(userModel.value);
-        _handlePostSignup();
+
+        if (updated) {
+          _handlePostSignup();
+        } else {
+          ShowToastDialog.showToast(
+            'Failed to save user data'.tr,
+          );
+        }
       } else {
         await _signupWithApi();
       }
+    } on SocketException {
+      ShowToastDialog.showToast(
+        'No internet connection'.tr,
+      );
     } catch (e) {
       log('Signup error: $e');
-      ShowToastDialog.showToast(e.toString());
+      ShowToastDialog.showToast(
+        'Something went wrong'.tr,
+      );
     } finally {
       ShowToastDialog.closeLoader();
     }
   }
 
+
   Future<void> _signupWithApi() async {
+    // final body = {
+    //   'type': 'email',
+    //   'first_name': firstNameEditingController.value.text.trim(),
+    //   'last_name': lastNameEditingController.value.text.trim(),
+    //   'email': emailEditingController.value.text.trim().toLowerCase(),
+    //   'password': passwordEditingController.value.text.trim(),
+    //   'phone_number': phoneNUmberEditingController.value.text.trim(),
+    //   'country_code': countryCodeEditingController.value.text,
+    //   //'zone_id': selectedZone.value.id,
+    //   'fcm_token': await NotificationService.getToken(),
+    //   'app_identifier': Platform.isAndroid ? 'android' : 'ios',
+    // };
+
     final body = {
-      'type': 'email',
-      'first_name': firstNameEditingController.value.text.trim(),
-      'last_name': lastNameEditingController.value.text.trim(),
-      'email': emailEditingController.value.text.trim().toLowerCase(),
-      'password': passwordEditingController.value.text.trim(),
-      'phone_number': phoneNUmberEditingController.value.text.trim(),
-      'country_code': countryCodeEditingController.value.text,
-      'zone_id': selectedZone.value.id,
-      'fcm_token': await NotificationService.getToken(),
-      'app_identifier': Platform.isAndroid ? 'android' : 'ios',
+      "firstName":
+      firstNameEditingController.value.text.trim(),
+
+      "lastName":
+      lastNameEditingController.value.text.trim(),
+
+      "phoneNumber":
+      phoneNUmberEditingController.value.text.trim(),
+
+      "email":
+      emailEditingController.value.text.trim().toLowerCase(),
+
+      "nomineeName":
+      nomineeNameEditingController.value.text.trim(),
+
+      "nomineePhoneNumber":
+      nomineePhoneEditingController.value.text.trim(),
+
+      "familyMemberName":
+      familyMemberNameEditingController.value.text.trim(),
+
+      "familyMemberPhoneNumber":
+      familyMemberPhoneEditingController.value.text.trim(),
+
+      "aadharNumber":
+      aadharNumberEditingController.value.text.trim(),
+
+      "drivingLicenseNumber":
+      drivingLicenseEditingController.value.text.trim(),
+
+      "buildingNumber":
+      buildingNumberEditingController.value.text.trim(),
+
+      "road":
+      roadEditingController.value.text.trim(),
+
+      "landmark":
+      landmarkEditingController.value.text.trim(),
+
+      "stateId":
+      selectedState.value?.stateId,
+
+      "cityId":
+      selectedCity.value?.cityId,
+
+      "areaId":
+      selectedArea.value?.areaId,
+
+      "password":
+      passwordEditingController.value.text.trim(),
+
+      // Temporary until actual RC upload is implemented
+      "rcCopy": rcNumberEditingController.value.text.trim().isEmpty
+          ? "temp_rc_copy"
+          : rcNumberEditingController.value.text.trim(),
     };
 
     log('Signup request: ${const JsonEncoder.withIndent('  ').convert(body)}');
-
+    log('API URL: ${Constant.baseUrl}drivers/signup');
     final response = await http.post(
-      Uri.parse('${Constant.baseUrl}drivers/signup'),
+      //Uri.parse('${Constant.baseUrl}drivers/signup'),
+      Uri.parse(
+      'http://srv1617582.hstgr.cloud:8084/api/driver/postDriverDetails',
+      ),
       headers: const {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODY0MTMsImV4cCI6MTc4MTY3MjgxM30.sHWQluvVGftqneDye532r8bXDDqYJmep_fFrSS_1-V8',
       },
       body: json.encode(body),
-    );
+    )
+.timeout(const Duration(seconds: 30));
 
     log('Signup response [${response.statusCode}]: ${response.body}');
 
-    final responseData =
-    json.decode(response.body) as Map<String, dynamic>;
+    // final responseData =
+    // json.decode(response.body) as Map<String, dynamic>;
 
-    if ((response.statusCode == 200 || response.statusCode == 201) &&
-        responseData['success'] == true &&
-        responseData['data'] != null) {
-      final data = responseData['data'] as Map<String, dynamic>;
+    Map<String, dynamic> responseData = {};
+
+    try {
+      responseData =
+      json.decode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      ShowToastDialog.showToast('Invalid server response'.tr);
+      return;
+    }
+
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+
       await _buildUserModel(
-        id: data['id']?.toString(),
+        id: responseData['driverId']?.toString(),
         provider: 'email',
       );
+
+      log("Driver ID from Java API: ${responseData['driverId']}");
+      final updated =
       await _updateUserWithoutIsActive(userModel.value);
-      _handlePostSignup();
+
+      if (updated) {
+        _handlePostSignup();
+      } else {
+        ShowToastDialog.showToast(
+          'Failed to save user data',
+        );
+      }
+
     } else {
+
       ShowToastDialog.showToast(
-          responseData['message'] as String? ?? 'Signup failed'.tr);
+        responseData['message']?.toString() ??
+            'Signup failed',
+      );
+
     }
   }
 
@@ -541,25 +965,70 @@ class SignupController extends GetxController {
       final payload = user.toJson();
       payload.remove('isActive');
 
-      final response = await http.post(
-        Uri.parse('${Constant.baseUrl}driver-sql/users/update'),
-        headers: const {
+      if (payload['createdAt'] is Timestamp) {
+        payload['createdAt'] =
+            (payload['createdAt'] as Timestamp)
+                .millisecondsSinceEpoch;
+      }
+
+      log("UPDATE URL => ${Constant.baseUrl}driver-sql/users/update");
+      log("UPDATE PAYLOAD => ${json.encode(payload)}");
+      // final response = await http.post(
+      //   Uri.parse('${Constant.baseUrl}driver-sql/users/update'),
+      //   headers: const {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: json.encode(payload),
+      // );
+      final driverId = payload['id'];
+
+      final response = await http.put(
+        Uri.parse(
+          'http://srv1617582.hstgr.cloud:8084/api/driver/updateDriverDetails?driverId=$driverId',
+        ),
+        headers: {
+          'accept': '*/*',
           'Content-Type': 'application/json',
+          'Authorization':
+          'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE1ODg0MzYsImV4cCI6MTc4MTY3NDgzNn0.vej38x22jMXmgGpi8McNp6tmVr_P3YPROeYyfSR4jJY',
         },
-        body: json.encode(payload),
+        body: jsonEncode({
+          "firstName": user.firstName,
+          "lastName": user.lastName,
+          "phoneNumber": user.phoneNumber,
+          "email": user.email,
+        }),
       );
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body) as Map<String, dynamic>;
-        if (responseData['success'] == true) {
-          Constant.userModel = user;
-          return true;
-        }
+      // if (response.statusCode == 200) {
+      //   final responseData =
+      //   json.decode(response.body) as Map<String, dynamic>;
+      //
+      //   if (responseData['success'] == true) {
+      //     Constant.userModel = user;
+      //     return true;
+      //   }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData =
+        json.decode(response.body) as Map<String, dynamic>;
+
+        log('UPDATE SUCCESS => $responseData');
+
+        Constant.userModel = user;
+        return true;
+
       }
+
+      log(
+        'Update user failed. Status: ${response.statusCode}, Body: ${response.body}',
+      );
+
+      return false;
     } catch (e) {
-      log('Failed to update user without isActive: $e');
-    }
-    return false;
+  log('Failed to update user without isActive: $e');
+  return false;
+  }
   }
 
   void _handlePostSignup() {
@@ -570,6 +1039,7 @@ class SignupController extends GetxController {
           'Thank you for signing up. Your application is under review — we\'ll notify you once it\'s approved.'
               .tr);
     }
-    Get.offAll(const LoginScreen());
+    // Get.offAll(const LoginScreen());
+    Get.offAll(() => const DashBoardScreen());
   }
 }

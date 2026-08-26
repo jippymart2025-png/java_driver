@@ -69,7 +69,7 @@ class UserModel {
     this.subscriptionPlanId,
     this.subscriptionExpiryDate,
     this.subscriptionPlan,
-    this.deliveryAmount
+    this.deliveryAmount,
   });
 
   String fullName() {
@@ -313,7 +313,8 @@ class UserModel {
     // Backend may send one of the two keys; mirror to avoid accidental false writes.
     if (active == null && isActive != null) active = isActive;
     if (isActive == null && active != null) isActive = active;
-    isDocumentVerify = json['isDocumentVerify'] == "1" ||
+    isDocumentVerify =
+        json['isDocumentVerify'] == "1" ||
         json['isDocumentVerify'] == true ||
         json['isDocumentVerify'] == 1;
     print("isDocumentVerify  $isDocumentVerify");
@@ -381,7 +382,9 @@ class UserModel {
           userBankDetails = null;
         }
       } else if (bankDetailsData is Map<String, dynamic>) {
-        userBankDetails = UserBankDetails.fromJson(bankDetailsData as Map<String, dynamic>);
+        userBankDetails = UserBankDetails.fromJson(
+          bankDetailsData as Map<String, dynamic>,
+        );
       } else {
         userBankDetails = null;
       }
@@ -421,7 +424,9 @@ class UserModel {
         }
       } else if (shippingData is Map<String, dynamic>) {
         shippingAddress = <ShippingAddress>[];
-        shippingAddress!.add(ShippingAddress.fromJson(shippingData as Map<String, dynamic>));
+        shippingAddress!.add(
+          ShippingAddress.fromJson(shippingData as Map<String, dynamic>),
+        );
       } else {
         shippingAddress = null;
       }
@@ -511,7 +516,9 @@ class UserModel {
           subscriptionExpiryDate = null;
         }
       } else if (json['subscriptionExpiryDate'] is int) {
-        subscriptionExpiryDate = Timestamp.fromMillisecondsSinceEpoch(json['subscriptionExpiryDate']);
+        subscriptionExpiryDate = Timestamp.fromMillisecondsSinceEpoch(
+          json['subscriptionExpiryDate'],
+        );
       }
     } else {
       subscriptionExpiryDate = null;
@@ -519,7 +526,9 @@ class UserModel {
 
     if (json['subscription_plan'] != null) {
       if (json['subscription_plan'] is Map<String, dynamic>) {
-        subscriptionPlan = SubscriptionPlanModel.fromJson(json['subscription_plan'] as Map<String, dynamic>);
+        subscriptionPlan = SubscriptionPlanModel.fromJson(
+          json['subscription_plan'] as Map<String, dynamic>,
+        );
       } else if (json['subscription_plan'] is String) {
         try {
           final parsed = jsonDecode(json['subscription_plan']);
@@ -572,7 +581,9 @@ class UserModel {
     }
 
     if (shippingAddress != null) {
-      data['shippingAddress'] = shippingAddress!.map((v) => v.toJson()).toList();
+      data['shippingAddress'] = shippingAddress!
+          .map((v) => v.toJson())
+          .toList();
     }
 
     if (role == Constant.userRoleDriver) {
@@ -639,7 +650,12 @@ class UserLocation {
     }
     if (data is! Map) return null;
     final json = Map<String, dynamic>.from(data);
-    var lat = _coordFromJson(json, const ['latitude', 'lat', 'Lat', '_latitude']);
+    var lat = _coordFromJson(json, const [
+      'latitude',
+      'lat',
+      'Lat',
+      '_latitude',
+    ]);
     var lng = _coordFromJson(json, const [
       'longitude',
       'lng',
@@ -714,7 +730,7 @@ class ShippingAddress {
     this.location,
     this.isDefault,
     this.addressAs,
-    this.id
+    this.id,
   });
 
   ShippingAddress.fromJson(Map<String, dynamic> json) {
@@ -730,7 +746,9 @@ class ShippingAddress {
       } else if (json['isDefault'] is int) {
         isDefault = json['isDefault'] == 1;
       } else if (json['isDefault'] is String) {
-        isDefault = json['isDefault'] == '1' || json['isDefault'].toLowerCase() == 'true';
+        isDefault =
+            json['isDefault'] == '1' ||
+            json['isDefault'].toLowerCase() == 'true';
       } else {
         isDefault = null;
       }
@@ -740,7 +758,9 @@ class ShippingAddress {
     addressAs = json['addressAs'];
     location = UserLocation.tryParseCoords(json['location']);
     location ??= UserLocation.tryParseCoords(json['coordinates']);
-    location ??= UserLocation.tryParseCoords(json['geoPoint'] ?? json['geopoint']);
+    location ??= UserLocation.tryParseCoords(
+      json['geoPoint'] ?? json['geopoint'],
+    );
     if (location == null ||
         location!.latitude == null ||
         location!.longitude == null) {

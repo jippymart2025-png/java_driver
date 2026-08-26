@@ -13,8 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 //  Incentive config
 // ─────────────────────────────────────────────────────────────────────────────
-const int    _kBonusOrderTarget = 9;
-const double _kBonusAmount      = 120.0;
+const int    _kBonusOrderTarget = 20;
+//const double _kBonusAmount      = 300.0;
 
 // =============================================================================
 //  TodayDashboardSection
@@ -58,12 +58,28 @@ class _TodayDashboardSectionState extends State<TodayDashboardSection> {
 
         // ── Metric cards ──────────────────────────────────────────────────
         Obx(() {
-          final api           = widget.ctrl.todayDashboard.value;
-          final totalOrders   = api?.totalOrdersToday ?? _fallbackOrders(widget.ctrl);
-          final totalEarnings =
-              (api?.totalEarningsToday ?? _fallbackEarnings(widget.ctrl)) +
-                  (totalOrders >= _kBonusOrderTarget ? _kBonusAmount : 0);
+          // final api           = widget.ctrl.todayDashboard.value;
+          // final totalOrders   = api?.totalOrdersToday ?? _fallbackOrders(widget.ctrl);
+          // final totalEarnings =
+          //     (api?.totalEarningsToday ?? _fallbackEarnings(widget.ctrl)) +
+          //         (totalOrders >= _kBonusOrderTarget ? _kBonusAmount : 0);
 
+
+          final api = widget.ctrl.todayDashboard.value;
+
+          final totalOrders =
+              api?.totalOrdersToday ?? _fallbackOrders(widget.ctrl);
+
+          final baseEarnings =
+              api?.totalEarningsToday ?? _fallbackEarnings(widget.ctrl);
+
+          //final totalEarnings =
+             // baseEarnings //+ widget.ctrl.creditedBonus.value;
+
+
+        //  print(
+          //  "BASE=$baseEarnings BONUS=${widget.ctrl.creditedBonus.value} TOTAL=$totalEarnings",
+          //);
           return Row(
             children: [
               Expanded(
@@ -80,7 +96,7 @@ class _TodayDashboardSectionState extends State<TodayDashboardSection> {
                 child: DashboardMetricCard(
                   title: 'Earnings Today'.tr,
                   value: Constant.amountShow(
-                      amount: totalEarnings.toStringAsFixed(0)),
+                      amount: baseEarnings.toStringAsFixed(0)),
                   icon: Icons.currency_rupee_rounded,
                   iconBgColor: AppThemeData.success50,
                   iconColor: AppThemeData.success500,
@@ -94,6 +110,9 @@ class _TodayDashboardSectionState extends State<TodayDashboardSection> {
 
         // ── Incentive card ─────────────────────────────────────────────────
         Obx(() {
+          print(
+              "UI REBUILD -> BONUS=${widget.ctrl.creditedBonus.value}"
+          );
           final api       = widget.ctrl.todayDashboard.value;
           final completed = api?.totalOrdersToday ?? _fallbackOrders(widget.ctrl);
           return _IncentiveCard(
@@ -133,7 +152,7 @@ class _IncentiveCard extends StatefulWidget {
 }
 
 class _IncentiveCardState extends State<_IncentiveCard>
-    with SingleTickerProviderStateMixin {
+      with SingleTickerProviderStateMixin {
   late AnimationController _wheelCtrl;
   bool   _creditingBonus = false;
   bool   _bonusCredited  = false;
@@ -144,6 +163,9 @@ class _IncentiveCardState extends State<_IncentiveCard>
 
   String get _dailyBonusPrefKey =>
       'driver_daily_bonus_claimed_date_${Constant.userModel?.id ?? 'unknown'}';
+
+  double get bonusAmount =>
+      widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0;
 
   @override
   void initState() {
@@ -181,12 +203,19 @@ class _IncentiveCardState extends State<_IncentiveCard>
   // ── Wallet credit ─────────────────────────────────────────────────────────
   // FIX 1: All setState calls guarded with `mounted` — prevents
   //         "setState called after dispose" crash after async gaps.
+
   Future<void> _creditBonusToWallet() async {
+    print("Credit button clicked");
+    final bonusAmount =
+        widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0;
+    print("API Bonus Amount = $bonusAmount");
+
     if (_creditingBonus || _bonusCredited) return;
     if (!mounted) return;
     setState(() {
       _creditingBonus = true;
       _creditStatus   = 'Calling wallet API...';
+
     });
 
     try {
@@ -196,10 +225,16 @@ class _IncentiveCardState extends State<_IncentiveCard>
             "Accept": "application/json", // ✅ MUST
           },
 
+        // body: jsonEncode({
+        //   'user_id': Constant.userModel?.id,
+        //   //'amount'   : _kBonusAmount,
+        //   'amount' : widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0,
+        //   'bonus' : 1
+        // }),
         body: jsonEncode({
           'user_id': Constant.userModel?.id,
-          'amount'   : _kBonusAmount,
-          'bonus' : 1
+          'amount': bonusAmount,
+          'bonus': 1,
         }),
       ).timeout(const Duration(seconds: 10)); // FIX 2: timeout — no infinite hang
 
@@ -208,12 +243,26 @@ class _IncentiveCardState extends State<_IncentiveCard>
         final alreadyClaimedToday = res.statusCode == 409;
         await _persistDailyBonusLock();
         if (!mounted) return;
+
+        if (!alreadyClaimedToday) {
+          print("BONUS BEFORE = ${widget.ctrl.creditedBonus.value}");
+          // print("Bonus Amount = $bonusAmount");
+          // print("Before = ${widget.ctrl.creditedBonus.value}");
+          widget.ctrl.creditedBonus.value += bonusAmount;
+         //print("After = ${widget.ctrl.creditedBonus.value}");
+          print("BONUS AFTER = ${widget.ctrl.creditedBonus.value}");
+          print("AFTER CREDIT -> ${widget.ctrl.creditedBonus.value}");
+        }
         setState(() {
           _bonusCredited  = true;
           _creditingBonus = false;
+          // _creditStatus = alreadyClaimedToday
+          //     ? 'Today bonus already claimed.'.tr
+          //     //: '₹${_kBonusAmount.toInt()} credited to your wallet!';
+          //     : '₹${bonusAmount.toInt()} credited to your wallet!';
           _creditStatus = alreadyClaimedToday
               ? 'Today bonus already claimed.'.tr
-              : '₹${_kBonusAmount.toInt()} credited to your wallet!';
+              : '₹${bonusAmount.toInt()} credited to your wallet!';
         });
         return;
       }
@@ -230,11 +279,25 @@ class _IncentiveCardState extends State<_IncentiveCard>
     }
 
   }
-
   Future<void> _restoreDailyBonusLock() async {
     final prefs = await SharedPreferences.getInstance();
+
     final claimedDate = prefs.getString(_dailyBonusPrefKey) ?? '';
-    if (!mounted || claimedDate != _todayDateKey) return;
+
+    print("CLAIMED DATE = $claimedDate");
+    print("TODAY DATE = $_todayDateKey");
+
+    if (!mounted || claimedDate != _todayDateKey) {
+      return;
+    }
+
+    final savedBonus =
+        prefs.getDouble('${_dailyBonusPrefKey}_amount') ?? 0.0;
+
+    widget.ctrl.creditedBonus.value = savedBonus;
+
+    print("RESTORED BONUS = $savedBonus");
+
     setState(() {
       _bonusCredited = true;
       _creditStatus = 'Today bonus already claimed.'.tr;
@@ -243,9 +306,17 @@ class _IncentiveCardState extends State<_IncentiveCard>
 
   Future<void> _persistDailyBonusLock() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_dailyBonusPrefKey, _todayDateKey);
-  }
 
+    await prefs.setString(
+      _dailyBonusPrefKey,
+      _todayDateKey,
+    );
+
+    await prefs.setDouble(
+      '${_dailyBonusPrefKey}_amount',
+      widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0,
+    );
+  }
   // Future<void> _anthropicFallback() async {
   //   if (!mounted) return;
   //   setState(() => _creditStatus = 'Verifying with AI...');
@@ -351,7 +422,8 @@ class _IncentiveCardState extends State<_IncentiveCard>
                     const SizedBox(height: 2),
                     Text(
                       'Complete $_kBonusOrderTarget orders → earn '
-                          '${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} bonus'.tr,
+                          //'${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} bonus'.tr,
+                          '${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))} bonus'.tr,
                       style: TextStyle(
                         color: widget.theme.getThem()
                             ? AppThemeData.grey300
@@ -376,6 +448,7 @@ class _IncentiveCardState extends State<_IncentiveCard>
             progress: progress,
             wheelCtrl: _wheelCtrl,
             theme: widget.theme,
+            bonusAmount: bonusAmount,
           ),
 
           const SizedBox(height: 10),
@@ -385,6 +458,8 @@ class _IncentiveCardState extends State<_IncentiveCard>
             total: _kBonusOrderTarget,
             completed: widget.completedOrders,
             theme: widget.theme,
+            bonusAmount: bonusAmount,
+
           ),
 
           const SizedBox(height: 10),
@@ -460,7 +535,8 @@ class _IncentiveCardState extends State<_IncentiveCard>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '+ ${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))}',
+                    //'+ ${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))}',
+                    '+ ${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))}',
                     style: const TextStyle(
                       color: AppThemeData.success600,
                       fontSize: 20,
@@ -546,6 +622,8 @@ class _IncentiveCardState extends State<_IncentiveCard>
               crediting: _creditingBonus,
               statusMsg: _creditStatus,
               onCredit: _creditBonusToWallet,
+              bonusAmount: bonusAmount,
+
             ),
           ],
         ],
@@ -562,12 +640,14 @@ class _RoadScene extends StatelessWidget {
   final double progress;
   final AnimationController wheelCtrl;
   final DarkThemeProvider theme;
+  final double bonusAmount;
 
   const _RoadScene({
     required this.completedOrders,
     required this.progress,
     required this.wheelCtrl,
     required this.theme,
+    required this.bonusAmount,
   });
 
   @override
@@ -647,7 +727,8 @@ class _RoadScene extends StatelessWidget {
                           borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
-                          '₹${_kBonusAmount.toInt()}',
+                          //'₹${_kBonusAmount.toInt()}',
+                          '₹${bonusAmount.toInt()}',
                           style: TextStyle(
                             color: isDone
                                 ? AppThemeData.success600
@@ -801,11 +882,15 @@ class _StepDots extends StatelessWidget {
   final int total;
   final int completed;
   final DarkThemeProvider theme;
+  final double bonusAmount;
+
 
   const _StepDots({
     required this.total,
     required this.completed,
     required this.theme,
+    required this.bonusAmount,
+
   });
 
   @override
@@ -875,7 +960,9 @@ class _StepDots extends StatelessWidget {
                       borderRadius: BorderRadius.circular(3),
                     ),
                     child: Text(
-                      '₹${_kBonusAmount.toInt()}',
+                      //'₹${_kBonusAmount.toInt()}',
+                      //'₹${_kBonusAmount.toInt()}',
+                      '₹${bonusAmount.toInt()}',
                       style: TextStyle(
                         color: isDone
                             ? AppThemeData.success600
@@ -932,13 +1019,17 @@ class _WalletCreditPanel extends StatelessWidget {
   final bool crediting;
   final String statusMsg;
   final VoidCallback onCredit;
+  final double bonusAmount;
+
+
 
   const _WalletCreditPanel({
     required this.theme,
     required this.credited,
     required this.crediting,
     required this.statusMsg,
-    required this.onCredit,
+    required this.onCredit,    required this.bonusAmount,
+
   });
 
   @override
@@ -1028,7 +1119,9 @@ class _WalletCreditPanel extends StatelessWidget {
                 label: Text(
                   crediting
                       ? 'Processing...'.tr
-                      : 'Credit ${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} to Wallet'
+                     // : 'Credit ${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} to Wallet'
+                  // : 'Credit ${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))} to Wallet'
+                      : 'Credit ${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))} to Wallet'
                       .tr,
                   style: const TextStyle(
                     fontSize: 14,
@@ -1055,8 +1148,12 @@ class _StatusPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     return Obx(() {
       final api       = ctrl.todayDashboard.value;
+
+      final bonusAmount =
+          api?.driverIncentiveBonus ?? 0.0;
       final orders    = api?.totalOrdersToday ?? _fallbackOrders(ctrl);
       final bonusDone = orders >= _kBonusOrderTarget;
       final hasActive = (ctrl.currentOrder.value.id ?? '').isNotEmpty &&
@@ -1067,8 +1164,18 @@ class _StatusPanel extends StatelessWidget {
 
       if (bonusDone) {
         title      = 'Bonus unlocked! Great work.'.tr;
-        subtitle   = '${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} added to your earnings today.'.tr;
-        dotColor   = AppThemeData.success500;
+        //subtitle   = '${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} added to your earnings today.'.tr;
+        final bonusAmount =
+            api?.driverIncentiveBonus ?? 0.0;
+
+        subtitle =
+            //'${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))} ready to credit to wallet.'.tr;
+        // 'Credit ${Constant.amountShow(amount: (widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0).toStringAsFixed(0))} to Wallet'
+        // dotColor   = AppThemeData.success500;
+        subtitle =
+            '${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))} ready to credit to wallet.'.tr;
+
+        dotColor = AppThemeData.success500;
         panelColor = AppThemeData.success50;
       } else if (hasActive) {
         title      = 'Active delivery in progress'.tr;
@@ -1080,7 +1187,8 @@ class _StatusPanel extends StatelessWidget {
         title    = 'Waiting for new orders'.tr;
         subtitle = need > 0
             ? '$need more deliveries to unlock your '
-            '${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} bonus!'.tr
+            //'${Constant.amountShow(amount: _kBonusAmount.toStringAsFixed(0))} bonus!'.tr
+            '${Constant.amountShow(amount: bonusAmount.toStringAsFixed(0))} bonus!'.tr
             : 'New delivery requests appear as a bottom drawer.'.tr;
         dotColor   = AppThemeData.grey400;
         panelColor =

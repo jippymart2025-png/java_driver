@@ -60,52 +60,334 @@ class WalletScreen extends StatelessWidget {
 
                 // ── Section Header ──────────────────────────────────────────
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text(
-                      'Transaction History'.tr,
-                      style: TextStyle(
-                        fontFamily: AppThemeData.semiBold,
-                        fontSize: 15,
-                        color: isDark
-                            ? AppThemeData.grey100
-                            : AppThemeData.grey800,
+                  child: Obx(
+                        () => Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => controller.isIncentiveTab.value = false,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Transaction History'.tr,
+                                  style: TextStyle(
+                                    fontFamily: AppThemeData.semiBold,
+                                    fontSize: 17,
+                                    color: !controller.isIncentiveTab.value
+                                        ? AppThemeData.secondary300
+                                        : (isDark
+                                        ? AppThemeData.grey400
+                                        : AppThemeData.grey500),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  height: 2,
+                                  width: 120,
+                                  color: !controller.isIncentiveTab.value
+                                      ? AppThemeData.secondary300
+                                      : Colors.transparent,
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(width: 90),
+
+                          GestureDetector(
+                            onTap: () => controller.isIncentiveTab.value = true,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Incentive History'.tr,
+                                  style: TextStyle(
+                                    fontFamily: AppThemeData.semiBold,
+                                    fontSize: 17,
+                                    color: controller.isIncentiveTab.value
+                                        ? AppThemeData.secondary300
+                                        : (isDark
+                                        ? AppThemeData.grey400
+                                        : AppThemeData.grey500),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  height: 2,
+                                  width: 100,
+                                  color: controller.isIncentiveTab.value
+                                      ? AppThemeData.secondary300
+                                      : Colors.transparent,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
-                // ── Transaction List ────────────────────────────────────────
-                controller.transactions.isEmpty
-                    ? SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Constant.showEmptyView(
-                      message: 'Transaction history not found'.tr,
-                    ),
+                // SliverToBoxAdapter(
+                //   child: Padding(
+                //     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                //     child: Text(
+                //       'Transaction History'.tr,
+                //       style: TextStyle(
+                //         fontFamily: AppThemeData.semiBold,
+                //         fontSize: 15,
+                //         color: isDark
+                //             ? AppThemeData.grey100
+                //             : AppThemeData.grey800,
+                //       ),
+                //     ),
+                //   ),
+                // ),
+
+            //====================Incentive Filter (All / Current Month)======================
+
+                // ── Incentive Filter (All / Current Month) ─────────────────────
+                SliverToBoxAdapter(
+                  child: Obx(
+                        () => controller.isIncentiveTab.value
+                        ? Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Row(
+                        children: [
+                          ChoiceChip(
+                            label: Text(
+                              'All',
+                              style: TextStyle(
+                                color: controller.incentiveFilter.value == 'all'
+                                    ? AppThemeData.grey900
+                                    : AppThemeData.grey700,
+                                fontFamily: AppThemeData.semiBold,
+                              ),
+                            ),
+                            selected:
+                            controller.incentiveFilter.value == 'all',
+                            selectedColor: AppThemeData.secondary300.withOpacity(0.75),
+                            backgroundColor: isDark
+                                ? AppThemeData.grey800
+                                : AppThemeData.grey100,
+                            onSelected: (_) async {
+                              controller.incentiveFilter.value = 'all';
+                              await controller.fetchIncentiveHistory(
+                                reset: true,
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 10),
+                          ChoiceChip(
+                            label: Text(
+                              'Current Month',
+                              style: TextStyle(
+                                color: controller.incentiveFilter.value == 'currentMonth'
+                                    ? AppThemeData.grey900
+                                    : AppThemeData.grey700,
+                                fontFamily: AppThemeData.semiBold,
+                              ),
+                            ),
+                            selected:
+                            controller.incentiveFilter.value ==
+                                'currentMonth',
+                            selectedColor: AppThemeData.secondary300.withOpacity(0.75),
+                            backgroundColor: isDark
+                                ? AppThemeData.grey800
+                                : AppThemeData.grey100,
+                            onSelected: (_) async {
+                              controller.incentiveFilter.value =
+                              'currentMonth';
+                              await controller.fetchIncentiveHistory(
+                                reset: true,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    )
+                        : const SizedBox.shrink(),
                   ),
-                )
-                    : SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  sliver: SliverList.separated(
-                    itemCount: controller.transactions.length,
-                    itemBuilder: (_, index) => _TransactionTile(
-                      model: controller.transactions[index],
-                      isDark: isDark,
+                ),
+            //
+            //     SliverToBoxAdapter(
+            //       child: Obx(
+            //             () => controller.isIncentiveTab.value
+            //             ? Padding(
+            //           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            //           child: DropdownButtonFormField<String>(
+            //             value: controller.incentiveFilter.value,
+            //             decoration: const InputDecoration(
+            //               border: OutlineInputBorder(),
+            //               isDense: true,
+            //             ),
+            //             items: const [
+            //               DropdownMenuItem(
+            //                 value: 'all',
+            //                 child: Text('All'),
+            //               ),
+            //               DropdownMenuItem(
+            //                 value: 'currentMonth',
+            //                 child: Text('Current Month'),
+            //               ),
+            //             ],
+            //             onChanged: (value) async {
+            //               if (value == null) return;
+            //
+            //               controller.incentiveFilter.value = value;
+            //
+            //               await controller.fetchIncentiveHistory(
+            //                 reset: true,
+            //               );
+            //             },
+            //           ),
+            //         )
+            //             : const SizedBox.shrink(),
+            //       ),
+            //     ),
+                // ── Transaction List ────────────────────────────────────────
+                // ── Transaction / Incentive List ────────────────────────────
+                if (!controller.isIncentiveTab.value)
+
+                // TRANSACTION HISTORY
+                  (controller.transactions.isEmpty && !controller.isLoading.value)
+                      ? SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Constant.showEmptyView(
+                        message: 'Transaction history not found'.tr,
+                      ),
                     ),
-                    separatorBuilder: (_, __) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: MySeparator(
-                        color: isDark
-                            ? AppThemeData.grey700
-                            : AppThemeData.grey200,
+                  )
+                      : SliverPadding(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    sliver: SliverList.separated(
+                      itemCount: controller.transactions.length,
+                      itemBuilder: (_, index) => _TransactionTile(
+                        model: controller.transactions[index],
+                        isDark: isDark,
+                      ),
+                      separatorBuilder: (_, __) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: MySeparator(
+                          color: isDark
+                              ? AppThemeData.grey700
+                              : AppThemeData.grey200,
+                        ),
+                      ),
+                    ),
+                  )
+
+                else
+
+                // INCENTIVE HISTORY
+                  (controller.incentives.isEmpty)
+                      ? SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Constant.showEmptyView(
+                        message: 'Incentive history not found'.tr,
+                      ),
+                    ),
+                  )
+                      : SliverPadding(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    sliver: SliverList.separated(
+                      itemCount: controller.incentives.length,
+                      itemBuilder: (_, index) {
+                        final incentive = controller.incentives[index];
+
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${incentive.noOfOrders ?? 0} Orders',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontFamily: AppThemeData.semiBold,
+                              color: isDark
+                                  ? AppThemeData.grey100
+                                  : AppThemeData.grey800,
+                            ),
+                          ),
+                          subtitle: Text(
+                            incentive.date ?? '',
+                          ),
+                          trailing: Text(
+                            Constant.amountShow(
+                              amount: (incentive.incentiveAmount ?? 0)
+                                  .toString(),
+                            ),
+                            style: const TextStyle(
+                              color: AppThemeData.success400,
+                              fontFamily: AppThemeData.semiBold,
+                            ),
+                          ),
+                        );
+                      },
+                      separatorBuilder: (_, __) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: MySeparator(
+                          color: isDark
+                              ? AppThemeData.grey700
+                              : AppThemeData.grey200,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  //   : SliverPadding(
+                  // padding: const EdgeInsets.symmetric(
+                  //     horizontal: 16, vertical: 8),
+
+                  // sliver: SliverList.separated(
+                  //   itemCount: controller.transactions.length,
+                  //   itemBuilder: (_, index) => _TransactionTile(
+                  //     model: controller.transactions[index],
+                  //     isDark: isDark,
+                  //   ),
+                  //   separatorBuilder: (_, __) => Padding(
+                  //     padding: const EdgeInsets.symmetric(vertical: 4),
+                  //     child: MySeparator(
+                  //       color: isDark
+                  //           ? AppThemeData.grey700
+                  //           : AppThemeData.grey200,
+                  //     ),
+                  //   ),
+                  // ),
+                //     SliverList.separated(
+                //       itemCount: controller.transactions.length +
+                //           (controller.isFetchingMore.value ? 1 : 0),
+                //
+                //       itemBuilder: (_, index) {
+                //         if (index == controller.transactions.length) {
+                //           return const Padding(
+                //             padding: EdgeInsets.symmetric(vertical: 16),
+                //             child: Center(child: CircularProgressIndicator()),
+                //           );
+                //         }
+                //
+                //         return _TransactionTile(
+                //           model: controller.transactions[index],
+                //           isDark: isDark,
+                //         );
+                //       },
+                //
+                //       separatorBuilder: (_, __) => Padding(
+                //         padding: const EdgeInsets.symmetric(vertical: 4),
+                //         child: MySeparator(
+                //           color: isDark
+                //               ? AppThemeData.grey700
+                //               : AppThemeData.grey200,
+                //         ),
+                //       ),
+                //     )
+                // ),
 
                 // ── Pagination Footer ───────────────────────────────────────
+
                 SliverToBoxAdapter(
                   child: Obx(() {
                     if (controller.isFetchingMore.value) {
@@ -114,8 +396,8 @@ class WalletScreen extends StatelessWidget {
                         child: Center(child: CircularProgressIndicator()),
                       );
                     }
-                    if (!controller.hasMore.value &&
-                        controller.transactions.isNotEmpty) {
+
+                    if (!controller.hasMore.value && controller.transactions.isNotEmpty) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Center(
@@ -132,9 +414,39 @@ class WalletScreen extends StatelessWidget {
                         ),
                       );
                     }
+
                     return const SizedBox.shrink();
                   }),
                 ),
+                // SliverToBoxAdapter(
+                //   child: Obx(() {
+                //     if (controller.isFetchingMore.value) {
+                //       return const Padding(
+                //         padding: EdgeInsets.symmetric(vertical: 16),
+                //         child: Center(child: CircularProgressIndicator()),
+                //       );
+                //     }
+                //     if (!controller.hasMore.value &&
+                //         controller.transactions.isNotEmpty) {
+                //       return Padding(
+                //         padding: const EdgeInsets.symmetric(vertical: 16),
+                //         child: Center(
+                //           child: Text(
+                //             'No more transactions'.tr,
+                //             style: TextStyle(
+                //               fontSize: 13,
+                //               fontFamily: AppThemeData.medium,
+                //               color: isDark
+                //                   ? AppThemeData.grey500
+                //                   : AppThemeData.grey400,
+                //             ),
+                //           ),
+                //         ),
+                //       );
+                //     }
+                //     return const SizedBox.shrink();
+                //   }),
+                // ),
 
                 // ── Bottom safe area ────────────────────────────────────────
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -201,8 +513,18 @@ class _WalletBalanceCard extends StatelessWidget {
           child: Column(
             children: [
               // ── Label ──────────────────────────────────────────────────────
+              // Text(
+              //   'My Wallet'.tr,
+              //   style: const TextStyle(
+              //     color: AppThemeData.grey900,
+              //     fontSize: 16,
+              //     fontFamily: AppThemeData.regular,
+              //   ),
+              // ),
               Text(
-                'My Wallet'.tr,
+                controller.isIncentiveTab.value
+                    ? 'Total Incentives'.tr
+                    : 'My Wallet'.tr,
                 style: const TextStyle(
                   color: AppThemeData.grey900,
                   fontSize: 16,
@@ -211,9 +533,15 @@ class _WalletBalanceCard extends StatelessWidget {
               ),
 
               // ── Balance ────────────────────────────────────────────────────
+              // Text(
+              //   Constant.amountShow(
+              //     amount: controller.totalWalletAmount.value.toString(),
+              //   ),
               Text(
                 Constant.amountShow(
-                  amount: controller.totalWalletAmount.value.toString(),
+                  amount: controller.isIncentiveTab.value
+                      ? controller.totalIncentiveAmount.value.toString()
+                      : controller.totalWalletAmount.value.toString(),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -366,7 +694,9 @@ class _TransactionTile extends StatelessWidget {
                 Text(
                   model.date == null
                       ? '-'
-                      : Constant.timestampToDateTime(model.date!),
+                      // : Constant.timestampToDateTime(model.date!),
+                     // : Constant.timestampToDateTime(model.date as Timestamp),
+                     : Constant.timestampToDateTime(Timestamp.fromDate(model.date!)),
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: AppThemeData.medium,

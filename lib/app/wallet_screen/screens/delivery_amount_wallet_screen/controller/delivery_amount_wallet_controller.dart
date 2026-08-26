@@ -9,6 +9,7 @@ import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/models/withdraw_method_model.dart';
 import 'package:jippydriver_driver/models/withdrawal_model.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
+import 'package:jippydriver_driver/models/driver_earning_history_model.dart';
 
 /// How long cached data is considered fresh before a background re-fetch
 /// is triggered on next view.
@@ -35,11 +36,14 @@ class DeliveryAmountWalletController extends GetxController {
   final Rx<WithdrawMethodModel> withdrawMethodModel = WithdrawMethodModel().obs;
   final RxList<DriverAmountWalletTransactionModel> transactions =
       <DriverAmountWalletTransactionModel>[].obs;
+  final RxList<DriverEarningHistoryModel> earningHistory =
+      <DriverEarningHistoryModel>[].obs;
   final RxList<WithdrawalModel> withdrawalList = <WithdrawalModel>[].obs;
 
   // ─── Scroll controller (owned here, passed to view) ─────────────────────────
   final ScrollController earningsScrollController = ScrollController();
   final ScrollController withdrawalScrollController = ScrollController();
+  final RxDouble totalEarningsAmount = 0.0.obs;
 
   // ─── Cache metadata ─────────────────────────────────────────────────────────
   DateTime? _lastFetchedAt;
@@ -92,14 +96,24 @@ class DeliveryAmountWalletController extends GetxController {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
+  // Future<void> _fetchAll({required bool forceRefresh}) async {
+  //   await Future.wait([
+  //     _fetchTransactions(reset: true, force: forceRefresh),
+  //     // _fetchWithdrawals(force: forceRefresh),
+  //     _loadProfileAndPaymentMethod(),
+  //   ]);
+  //   _lastFetchedAt = DateTime.now();
+  // }
   Future<void> _fetchAll({required bool forceRefresh}) async {
     await Future.wait([
-      _fetchTransactions(reset: true, force: forceRefresh),
-      // _fetchWithdrawals(force: forceRefresh),
+      _fetchTransactions(reset: true, force: forceRefresh), // wallet balance
+      _fetchEarningHistory(), // history list
       _loadProfileAndPaymentMethod(),
     ]);
     _lastFetchedAt = DateTime.now();
   }
+
+
 
   Future<void> _initialLoad({bool forceRefresh = false}) async {
     isLoading.value = true;
@@ -162,6 +176,36 @@ class DeliveryAmountWalletController extends GetxController {
     }
   }
 
+  // Future<void> _fetchEarningHistory() async {
+  //   try {
+  //     final result =
+  //     await FireStoreUtils.fetchOrderEarningsHistory();
+  //
+  //     earningHistory.assignAll(result);
+  //   } catch (e, st) {
+  //     log('_fetchEarningHistory error: $e\n$st');
+  //   }
+  // }
+
+  Future<void> _fetchEarningHistory() async {
+    try {
+      final result =
+      await FireStoreUtils.fetchOrderEarningsHistory();
+
+      final deliveredOrders = result
+          .where((e) => e.orderStatus == "DELIVERED")
+          .toList();
+
+      earningHistory.assignAll(deliveredOrders);
+
+      totalEarningsAmount.value = deliveredOrders.fold(
+        0.0,
+            (sum, item) => sum + (item.totalDeliveryFee ?? 0),
+      );
+    } catch (e, st) {
+      log('_fetchEarningHistory error: $e\n$st');
+    }
+  }
   // Future<void> _fetchWithdrawals({bool force = false}) async {
   //   if (!force && _isCacheValid && withdrawalList.isNotEmpty) return;
   //   try {

@@ -55,7 +55,8 @@ class DeliveryWalletCard extends StatelessWidget {
               Obx(
                     () => Text(
                   Constant.amountShow(
-                    amount: controller.totalCodAmount.value.toString(),
+                    //amount: controller.totalCodAmount.value.toString(),
+                    amount: controller.totalEarningsAmount.value.toString(),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

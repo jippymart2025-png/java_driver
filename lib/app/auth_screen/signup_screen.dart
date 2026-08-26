@@ -2,11 +2,11 @@ import 'dart:io';
 
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:jippydriver_driver/app/auth_screen/login_screen.dart';
-import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
+//import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/controllers/signup_controller.dart';
-import 'package:jippydriver_driver/models/zone_model.dart';
+//import 'package:jippydriver_driver/models/zone_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
-import 'package:jippydriver_driver/themes/responsive.dart';
+//import 'package:jippydriver_driver/themes/responsive.dart';
 import 'package:jippydriver_driver/themes/text_field_widget.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:flutter/gestures.dart';
@@ -15,6 +15,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
+import 'package:jippydriver_driver/models/state_model.dart';
+import 'package:jippydriver_driver/models/city_model.dart';
+import 'package:jippydriver_driver/models/area_model.dart';
 
 /// OPTIMIZATIONS:
 /// 1. Single AnimationController replaces 11 separate TweenAnimationBuilders.
@@ -39,7 +42,7 @@ class _SignupScreenState extends State<SignupScreen>
   late final List<Animation<Offset>> _slideAnims;
 
   // title, subtitle, link, name row, email, phone, zone, password, confirm, button
-  static const _itemCount = 10;
+  static const _itemCount = 19;
   static const _duration = Duration(milliseconds: 550);
   static const _stagger = 60; // ms
 
@@ -288,21 +291,336 @@ class _SignupScreenState extends State<SignupScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Zone dropdown ────────────────────────────────────
-                  _Animated(
+                  //----------------Nominee Name--------------------
+
+                    _Animated(
                     fade: _fadeAnims[6],
                     slide: _slideAnims[6],
-                    child: _ZoneDropdown(
-                      controller: controller,
-                      isDark: isDark,
+                    child: TextFieldWidget(
+                      title: 'Nominee Name'.tr,
+                      controller: controller.nomineeNameEditingController.value,
+                      hintText: 'Enter Nominee Name'.tr,
+                      textInputAction: TextInputAction.next,
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_user.svg',
+                        isDark: isDark,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Password fields (email signup only) ──────────────
+
+                  //--------------Nominee Phone Number---------
                   _Animated(
                     fade: _fadeAnims[7],
                     slide: _slideAnims[7],
+                    child: TextFieldWidget(
+                      title: 'Nominee Phone Number'.tr,
+                      controller: controller.nomineePhoneEditingController.value,
+                      hintText: 'Enter Nominee Phone Number'.tr,
+                      textInputType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_call.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //-----------Family Member Name--------
+
+                  _Animated(
+                    fade: _fadeAnims[8],
+                    slide: _slideAnims[8],
+                    child: TextFieldWidget(
+                      title: 'Family Member Name'.tr,
+                      controller: controller.familyMemberNameEditingController.value,
+                      hintText: 'Enter Family Member Name'.tr,
+                      textInputAction: TextInputAction.next,
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_user.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //----------- Family Member Phone Number------
+                  _Animated(
+                    fade: _fadeAnims[9],
+                    slide: _slideAnims[9],
+                    child: TextFieldWidget(
+                      title: 'Family Member Phone Number'.tr,
+                      controller: controller.familyMemberPhoneEditingController.value,
+                      hintText: 'Enter Family Member Phone Number'.tr,
+                      textInputType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_call.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //--------Aadhar Number---------
+                  _Animated(
+                    fade: _fadeAnims[10],
+                    slide: _slideAnims[10],
+                    child: TextFieldWidget(
+                      title: 'Aadhar Number'.tr,
+                      controller: controller.aadharNumberEditingController.value,
+                      hintText: 'XXXX XXXX XXXX',
+                      textInputType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(12),
+                        //AadhaarInputFormatter(),
+                      ],
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_user.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, top: 4),
+                    // child: Text(
+                    //   'Format: 1234 5678 9012',
+                    //   style: TextStyle(
+                    //     fontSize: 12,
+                    //     color: isDark
+                    //         ? AppThemeData.grey400
+                    //         : AppThemeData.grey600,
+                    //   ),
+                    // ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //--------Driving License Number---------
+                  _Animated(
+                    fade: _fadeAnims[11],
+                    slide: _slideAnims[11],
+                    child: TextFieldWidget(
+                      title: 'Driving License Number'.tr,
+                      controller: controller.drivingLicenseEditingController.value,
+                      hintText: 'Enter Driving License Number'.tr,
+                      textInputAction: TextInputAction.next,
+
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_card.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //--------RC Number-------
+                  _Animated(
+                    fade: _fadeAnims[12],
+                    slide: _slideAnims[12],
+                    child: TextFieldWidget(
+                      title: 'RC Number'.tr,
+                      controller: controller.rcNumberEditingController.value,
+                      hintText: 'Enter RC Number'.tr,
+                      textInputAction: TextInputAction.next,
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_card.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //--------BUILDING NUMBER----------
+
+                  _Animated(
+                    fade: _fadeAnims[13],
+                    slide: _slideAnims[13],
+                    child: TextFieldWidget(
+                      title: 'Building Number'.tr,
+                      controller: controller.buildingNumberEditingController.value,
+                      hintText: 'Enter Building Number'.tr,
+                      textInputAction: TextInputAction.next,
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_location.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //-------ROAD-------
+                  _Animated(
+                    fade: _fadeAnims[14],
+                    slide: _slideAnims[14],
+                    child: TextFieldWidget(
+                      title: 'Road'.tr,
+                      controller: controller.roadEditingController.value,
+                      hintText: 'Enter Road Name'.tr,
+                      textInputAction: TextInputAction.next,
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_location.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //--------Landmark------
+                  _Animated(
+                    fade: _fadeAnims[15],
+                    slide: _slideAnims[15],
+                    child: TextFieldWidget(
+                      title: 'Landmark'.tr,
+                      controller: controller.landmarkEditingController.value,
+                      hintText: 'Enter Landmark'.tr,
+                      textInputAction: TextInputAction.next,
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_location.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //----Location-----
+                  Text(
+                    'Location'.tr,
+                    style: TextStyle(
+                      fontFamily: AppThemeData.semiBold,
+                      fontSize: 16,
+                      color: isDark
+                          ? AppThemeData.grey100
+                          : AppThemeData.grey900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  //-------State Dropdown
+                  //-------State + City
+                  _Animated(
+                    fade: _fadeAnims[16],
+                    slide: _slideAnims[16],
+                    child: Column(
+                      children: [
+
+                        // STATE DROPDOWN
+                        Obx(
+                              () => DropdownButtonFormField<StateModel>(
+                            value: controller.selectedState.value,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            hint: const Text('Select State'),
+                            items: controller.stateList.map((state) {
+                              return DropdownMenuItem<StateModel>(
+                                value: state,
+                                child: Text(state.stateName),
+                              );
+                            }).toList(),
+                                onChanged: (value) {
+                                  controller.selectedState.value = value;
+
+                                  controller.selectedCity.value = null;
+                                  controller.cityList.clear();
+
+                                  controller.selectedArea.value = null;
+                                  controller.areaList.clear();
+
+                                  if (value != null) {
+                                    controller.fetchCities(value.stateId!);
+                                  }
+                                },
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // CITY DROPDOWN
+                        Obx(
+                              () => DropdownButtonFormField<CityModel>(
+                            value: controller.selectedCity.value,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            hint: const Text('Select City'),
+                            items: controller.cityList.map((city) {
+                              return DropdownMenuItem<CityModel>(
+                                value: city,
+                                  child: Text(city.cityName ?? ''),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              controller.selectedCity.value = value;
+                              controller.selectedArea.value = null;
+
+                              controller.areaList.clear();
+
+                              if (value != null) {
+                                controller.fetchAreas(value.cityId!);
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //-----Area Dropdown
+                  _Animated(
+                    fade: _fadeAnims[17],
+                    slide: _slideAnims[17],
+                    child: Obx(
+                          () => DropdownButtonFormField<AreaModel>(
+                        value: controller.selectedArea.value,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                        hint: const Text('Select Area'),
+                        items: controller.areaList.map((area) {
+                          return DropdownMenuItem<AreaModel>(
+                            value: area,
+                            child: Text(area.areaName ?? ''),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          controller.selectedArea.value = value;
+                        },
+                      ),
+                    ),
+                  ),
+
+
+
+
+                  // ── Zone dropdown ────────────────────────────────────
+                  // _Animated(
+                  //   fade: _fadeAnims[6],
+                  //   slide: _slideAnims[6],
+                  //   child: _ZoneDropdown(
+                  //     controller: controller,
+                  //     isDark: isDark,
+                  //   ),
+                  // ),
+                  const SizedBox(height: 16),
+
+                  // ── Password fields (email signup only) ──────────────
+                  _Animated(
+                    fade: _fadeAnims[18],
+                    slide: _slideAnims[18],
                     child: Obx(() {
                       final isThirdParty = controller.type.value == 'google' ||
                           controller.type.value == 'apple' ||
@@ -330,6 +648,7 @@ class _SignupScreenState extends State<SignupScreen>
                                   .passwordVisible.value,
                             ),
                           )),
+
                           const SizedBox(height: 16),
                           // Confirm password
                           Obx(() => TextFieldWidget(
@@ -399,80 +718,79 @@ class _SignupButton extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Zone dropdown — extracted for readability
 // ─────────────────────────────────────────────────────────────────────────────
-class _ZoneDropdown extends StatelessWidget {
-  const _ZoneDropdown({
-    required this.controller,
-    required this.isDark,
-  });
-  final SignupController controller;
-  final bool isDark;
-
-  OutlineInputBorder _border(Color color) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(10),
-    borderSide: BorderSide(color: color, width: 1),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = isDark ? AppThemeData.grey900 : AppThemeData.grey50;
-    final focusBorderColor = AppThemeData.secondary300;
-    final fillColor = isDark ? AppThemeData.grey900 : AppThemeData.grey50;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Zone'.tr,
-          style: TextStyle(
-            fontFamily: AppThemeData.semiBold,
-            fontSize: 14,
-            color: isDark ? AppThemeData.grey100 : AppThemeData.grey800,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Obx(() => DropdownButtonFormField<ZoneModel>(
-          hint: Text(
-            'Select zone'.tr,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppThemeData.grey700,
-              fontFamily: AppThemeData.regular,
-            ),
-          ),
-          decoration: InputDecoration(
-            isDense: true,
-            filled: true,
-            fillColor: fillColor,
-            disabledBorder: _border(borderColor),
-            enabledBorder: _border(borderColor),
-            focusedBorder: _border(focusBorderColor),
-            errorBorder: _border(Colors.red),
-            border: _border(borderColor),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 14),
-          ),
-          value: controller.selectedZone.value.id == null
-              ? null
-              : controller.selectedZone.value,
-          onChanged: (value) {
-            if (value != null) controller.selectedZone.value = value;
-          },
-          style: TextStyle(
-            fontSize: 14,
-            color: isDark ? AppThemeData.grey50 : AppThemeData.grey900,
-            fontFamily: AppThemeData.medium,
-          ),
-          items: controller.zoneList.map((zone) {
-            return DropdownMenuItem<ZoneModel>(
-              value: zone,
-              child: Text(zone.name ?? ''),
-            );
-          }).toList(),
-        )),
-      ],
-    );
-  }
-}
+// class _ZoneDropdown extends StatelessWidget {
+//   const _ZoneDropdown({
+//     required this.controller,
+//     required this.isDark,
+//   });
+//   final SignupController controller;
+//   final bool isDark;
+//
+//   OutlineInputBorder _border(Color color) => OutlineInputBorder(
+//     borderRadius: BorderRadius.circular(10),
+//     borderSide: BorderSide(color: color, width: 1),
+//   );
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     final borderColor = isDark ? AppThemeData.grey900 : AppThemeData.grey50;
+//     final focusBorderColor = AppThemeData.secondary300;
+//     final fillColor = isDark ? AppThemeData.grey900 : AppThemeData.grey50;
+//
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Text(
+//           'Zone'.tr,
+//           style: TextStyle(
+//             fontFamily: AppThemeData.semiBold,
+//             fontSize: 14,
+//             color: isDark ? AppThemeData.grey100 : AppThemeData.grey800,
+//           ),
+//         ),
+//         const SizedBox(height: 6),
+//         Obx(() => DropdownButtonFormField<ZoneModel>(
+//           hint: Text(
+//             'Select zone'.tr,
+//             style: TextStyle(
+//               fontSize: 14,
+//               color: AppThemeData.grey700,
+//               fontFamily: AppThemeData.regular,
+//             ),
+//           ),
+//           decoration: InputDecoration(
+//             isDense: true,
+//             filled: true,
+//             fillColor: fillColor,
+//             disabledBorder: _border(borderColor),
+//             enabledBorder: _border(borderColor),
+//             focusedBorder: _border(focusBorderColor),
+//             errorBorder: _border(Colors.red),
+//             border: _border(borderColor),
+//             contentPadding: const EdgeInsets.symmetric(
+//                 horizontal: 12, vertical: 14),
+//           ),
+//           value: controller.selectedZone.value.id == null
+//               ? null
+//               : controller.selectedZone.value,
+//           onChanged: (value) {
+//             if (value != null) controller.selectedZone.value = value;
+//           },
+//             fontSize: 14,
+//             color: isDark ? AppThemeData.grey50 : AppThemeData.grey900,
+//             fontFamily: AppThemeData.medium,
+//           ),
+//           items: controller.zoneList.map((zone) {
+//             return DropdownMenuItem<ZoneModel>(
+//               value: zone,
+//               child: Text(zone.name ?? ''),
+//             );
+//           }).toList(),
+//         )),
+//       ],
+//     );
+//   }
+// }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets (same as in login_screen.dart — consider moving to a shared

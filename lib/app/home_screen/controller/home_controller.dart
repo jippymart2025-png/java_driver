@@ -2519,8 +2519,10 @@ class HomeController extends GetxController {
   double _restaurantToCustomerBillableKm = 0;
   final RxDouble totalCalculatedCharge        = 0.0.obs;
   final RxDouble surgeFee                     = 0.0.obs;
+  final RxDouble creditedBonus = 0.0.obs;
   final RxDouble toPayAmount                  = 0.0.obs;
   final RxBool isNavigatingToMap              = false.obs;
+
 
   // ── Charge coefficients ───────────────────────────────────────────────
   double _pickupRsPerKm               = 3.0;
@@ -2807,18 +2809,40 @@ class HomeController extends GetxController {
     (driverModel.value.id?.toString().trim().isNotEmpty ?? false)
         ? driverModel.value.id!.toString().trim()
         : (Constant.userModel?.id?.toString().trim() ?? '');
+
     if (driverId.isEmpty) return;
 
-    todayDashboardLoading.value = true;
+    // todayDashboardLoading.value = true;
+
     try {
-      final url = Uri.parse(
-          '${Constant.baseUrl}driver/dashboard/today?driver_id=$driverId');
+    //   final url = Uri.parse(
+    //
+    //       'http://srv1617582.hstgr.cloud:8084/api/driver/fetchEarnings?driverId=1&date=2026-05-13',
+    //
+    //
+    //   );
+    final today = DateTime.now();
+
+    final date =
+        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+    final url = Uri.parse(
+      'http://srv1617582.hstgr.cloud:8084/api/driver/fetchEarnings?driverId=$driverId&date=$date',
+    );
+
+      print("FINAL DRIVER ID = $driverId");
+      print("URL = $url");
+
       final httpClient = HttpClientService();
+
       final response = await httpClient.get(
         url,
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE2OTc0OTIsImV4cCI6MTc4MTc4Mzg5Mn0.aWAuZXJ_cvR869SLhto7ZPqrHz1CK6kZkIDvoK9S9x4'
+
+
         },
         cacheStrategy: CacheStrategy.custom,
         customTTL: const Duration(seconds: 20),
@@ -2828,25 +2852,52 @@ class HomeController extends GetxController {
         enableRetry: true,
       );
 
+      print("STATUS CODE : ${response.statusCode}");
+      print("RESPONSE BODY : ${response.body}");
+
       if (response.statusCode == 200) {
         if (response.body.startsWith('<')) return;
+
         final raw = jsonDecode(response.body);
+
         if (raw is Map<String, dynamic>) {
-          final parsed = TodayDashboardResponse.fromJson(raw);
-          if (parsed.success) {
-            todayDashboard.value = parsed.data;
-            todayDashboard.refresh();
-            _todayDashboardLastFetchAt = DateTime.now();
-          }
+          print("RAW JAVA RESPONSE : $raw");
+
+          final dashboardData = TodayDashboardData.fromJson(raw);
+
+          todayDashboard.value = dashboardData;
+          todayDashboard.refresh();
+
+          print(
+            "UPDATED -> Orders: ${dashboardData.totalOrdersToday}",
+          );
+
+          print(
+            "UPDATED -> Earnings: ${dashboardData.totalEarningsToday}",
+          );
+
+          print(
+            "UPDATED -> Incentive Bonus: ${dashboardData.driverIncentiveBonus}",
+          );
+
+          _todayDashboardLastFetchAt = DateTime.now();
         }
+      } else {
+        print("API ERROR : ${response.statusCode}");
+        print("API BODY : ${response.body}");
       }
-    } catch (e) {
-      AppLogger.log('Today dashboard fetch failed: $e', tag: 'API');
+    } catch (e, stackTrace) {
+      print("ERROR : $e");
+      print("STACKTRACE : $stackTrace");
+
+      AppLogger.log(
+        'Today dashboard fetch failed: $e',
+        tag: 'API',
+      );
     } finally {
       todayDashboardLoading.value = false;
     }
   }
-
   // ══════════════════════════════════════════════════════════════════════
   //  Init helpers
   // ══════════════════════════════════════════════════════════════════════

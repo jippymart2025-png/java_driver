@@ -8,6 +8,10 @@ import 'package:jippydriver_driver/models/orders_report_response_model.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:get/get.dart';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:jippydriver_driver/models/vendor_model.dart';
+import 'dart:async';
+
 /// Report tabs map to `ordersReport` query `type`: upcoming / settled, or omitted for all.
 enum OrderListTab { upcoming, settled, all }
 
@@ -48,13 +52,164 @@ class OrderListController extends GetxController {
   bool _fetchingFirstPage = false;
   bool _fetchingMore = false;
 
+  // @override
+  // void onInit() {
+  //   AppLogger.log('OrderListController onInit() called', tag: 'Controller');
+  //   getOrder();
+  //   super.onInit();
+  // }
+
   @override
   void onInit() {
-    AppLogger.log('OrderListController onInit() called', tag: 'Controller');
-    getOrder();
+    print("ORDER LIST CONTROLLER INIT");
+    super.onInit();
+    // print("ID => ${Constant.userModel?.id}");
+    // print("FIREBASE ID => ${Constant.userModel?.firebaseId}");
+
+    //AppLogger.log('OrderListController onInit() called', tag: 'Controller');
+
+    fetchTotalEarnings();
+    fetchOrderHistory();
+
     super.onInit();
   }
+// ---------- THIS FUNCTION IS ADDED NOW-------------
+  Future<void> fetchOrderHistory() async {
+    print("=== FETCH ORDER HISTORY STARTED ===");
+    print("ID => ${Constant.userModel?.id}");
+    print("FIREBASE ID => ${Constant.userModel?.firebaseId}");
+    print("DRIVER ID SENT => ${Constant.userModel?.id}");
 
+    try {
+      isLoading.value = true;
+      print("HEADERS => $_headers");
+      final response = await http.get(
+        Uri.parse(
+          'http://187.127.156.147:8084/api/driver/fetchOrderEarningsHistory?driverId=1',
+        ),
+        headers: _headers,
+      );
+
+      print("STATUS => ${response.statusCode}");
+      print("BODY => ${response.body}");
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+
+        orderList.clear();
+
+        // for (var item in data) {
+        //   orderList.add(
+        //     OrderModel(
+        //       id: item["orderId"].toString(),
+        //       status: item["orderStatus"] ?? "",
+        //       tipAmount: item["tips"].toString(),
+        //       calculatedCharges: {
+        //         "totalCalculatedCharge":
+        //         item["totalDeliveryFee"].toString(),
+        //       },
+        //       createdAt: Timestamp.now(),
+        //       vendor: VendorModel(
+        //         title: item["outletName"] ?? "Restaurant",
+        //       ),
+        //     ),
+        //   );
+        // }
+
+        // for (var item in data) {
+        //   orderList.add(
+        //     OrderModel.fromJson(
+        //       Map<String, dynamic>.from(item),
+        //     ),
+        //   );
+        // }
+
+        for (var item in data) {
+          final order = OrderModel.fromJson(
+            Map<String, dynamic>.from(item),
+          );
+
+          print("================================");
+          print("ORDER ID => ${order.id}");
+          print("PICKUP => ${order.pickUpCharges}");
+          print("DELIVER => ${order.deliverCharges}");
+          print("SURGE => ${order.surgeFee}");
+          print("TIP => ${order.tipAmount}");
+          print("STATUS => ${order.status}");
+          print("VENDOR => ${order.vendor?.title}");
+          print("================================");
+
+          orderList.add(order);
+        }
+        print("TOTAL ORDERS => ${orderList.length}");
+      }
+        if (orderList.isNotEmpty) {
+          print("FIRST ORDER =>");
+          print(orderList.first.id);
+          print(orderList.first.pickUpCharges);
+          print(orderList.first.deliverCharges);
+          print(orderList.first.surgeFee);
+
+      }
+    } catch (e) {
+      print("fetchOrderHistory error => $e");
+    } finally {
+      isLoading.value = false;
+    }
+  }
+  //////////fetchTotalEarnings function added now ------
+  Future<void> fetchTotalEarnings() async {
+    try {
+      isLoading.value = true;
+      print("BEFORE API");
+      final response = await http
+          .get(
+        Uri.parse(
+          'http://187.127.156.147:8084/api/driver/fetchTotalEarnings?driverId=1',
+          //'http://187.127.156.147:8084/api/driver/fetchTotalEarnings?driverId=$driverId',
+        ),
+        headers: _headers,
+      )
+          .timeout(const Duration(seconds: 15));
+
+      print("AFTER API");
+
+      print("STATUS => ${response.statusCode}");
+      print("BODY => ${response.body}");
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        totalOrders.value = data['totalOrders'] ?? 0;
+        totalCompleted.value = data['completedOrders'] ?? 0;
+
+        totalTips.value =
+            double.tryParse(data['totalTips'].toString()) ?? 0.0;
+
+        totalEarnings.value =
+            double.tryParse(data['totalEarnings'].toString()) ?? 0.0;
+
+        totalDeliveryCharge.value =
+            double.tryParse(data['totalDeliveryCharges'].toString()) ?? 0.0;
+
+        print("SUCCESS:");
+        print("totalOrders => ${totalOrders.value}");
+        print("totalCompleted => ${totalCompleted.value}");
+        print("totalTips => ${totalTips.value}");
+        print("totalEarnings => ${totalEarnings.value}");
+        print("totalDeliveryCharge => ${totalDeliveryCharge.value}");
+      } else {
+        print("API FAILED => ${response.statusCode}");
+      }
+    } on TimeoutException {
+      print("fetchTotalEarnings TIMEOUT");
+    } catch (e, s) {
+      print("fetchTotalEarnings ERROR => $e");
+      print(s);
+    } finally {
+      isLoading.value = false;
+    }
+  }
   @override
   void onClose() {
     AppLogger.log('OrderListController onClose() called', tag: 'Controller');
@@ -119,31 +274,58 @@ class OrderListController extends GetxController {
     int page = 1,
     int perPage = _perPage,
   }) {
-    final String driverId = Constant.userModel?.firebaseId ?? '';
-    final params = <String, String>{
-      'driver_id': driverId,
-      'page': page.toString(),
-      'per_page': perPage.toString(),
-    };
-    switch (tab) {
-      case OrderListTab.upcoming:
-        params['type'] = 'upcoming';
-        break;
-      case OrderListTab.settled:
-        params['type'] = 'settled';
-        break;
-      case OrderListTab.all:
-        break;
-    }
-    return Uri.parse('${Constant.baseUrl}ordersReport').replace(queryParameters: params);
+
+    final driverId = Constant.userModel?.id?.toString() ?? "1";
+    print("Constant.userModel = ${Constant.userModel}");
+    print("Constant.userModel.id = ${Constant.userModel?.id}");
+
+    return Uri.parse(
+
+      'http://187.127.156.147:8084/api/driver/fetchOrderEarningsHistory?driverId=1',
+    );
   }
 
+  //final String driverId = Constant.userModel?.firebaseId ?? '';
+    // final String driverId =
+    // (Constant.userModel?.id ?? 0).toString();
+    // final params = <String, String>{
+    //   'driver_id': driverId,
+    //   'page': page.toString(),
+    //   'per_page': perPage.toString(),
+    // };
+    // switch (tab) {
+    //   case OrderListTab.upcoming:
+    //     params['type'] = 'upcoming';
+    //     break;
+    //   case OrderListTab.settled:
+    //     params['type'] = 'settled';
+    //     break;
+    //   case OrderListTab.all:
+    //     break;
+    // }
+   //return Uri.parse('${Constant.baseUrl}ordersReport').replace(queryParameters: params);
+    //return Uri.parse('http://187.127.156.147:8084/api/driver/fetchTotalEarnings?driverId=4');
+    // return Uri.parse(
+    //   'http://187.127.156.147:8084/api/driver/fetchOrderEarningsHistory?driverId=${Constant.userModel?.id ?? 2}',
+    // );
+   // final int driverId = Constant.userModel?.id ?? 1;
+
+    // return Uri.parse(
+    //   'http://187.127.156.147:8084/api/driver/fetchOrderEarningsHistory?driverId=$driverId',
+    // );
+
+
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
+
+        'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'Authorization' : ' eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE3ODU0MjcsImV4cCI6MTc4MTg3MTgyN30.a_DpO9hDp_TaV7LXNGGrU3G9ecNQYRYth3YlCtiLM8g',
+
   };
 
   Future<void> getOrder() async {
+    print("GET ORDER BLOCKED");
+    return;
     if (_fetchingFirstPage) return;
     final tabForRequest = _activeTab;
     _fetchingFirstPage = true;
@@ -159,6 +341,11 @@ class OrderListController extends GetxController {
       totalTips.value = 0;
       totalDeliveryCharge.value = 0;
 
+
+      print(
+        "GET ORDER URL => ${_buildOrdersUrl(tab: tabForRequest, page: 1)}",
+      );
+
       final response = await http
           .get(_buildOrdersUrl(tab: tabForRequest, page: 1), headers: _headers)
           .timeout(const Duration(seconds: 15));
@@ -168,9 +355,14 @@ class OrderListController extends GetxController {
       if (response.statusCode == 200) {
         _handleSuccess(response.body, tabForRequest, isFirstPage: true);
         _markTabCachedFromNetwork();
-      } else {
-        log('getOrder() – HTTP ${response.statusCode}');
-      }
+        // } else {
+        //   log('getOrder() – HTTP ${response.statusCode}');
+        // }
+
+      }else {
+    print("GET ORDER STATUS => ${response.statusCode}");
+    print("GET ORDER BODY => ${response.body}");
+    }
     } catch (e) {
       log('getOrder() error: $e');
     } finally {
@@ -188,6 +380,7 @@ class OrderListController extends GetxController {
   }
 
   Future<void> loadMore() async {
+    return;
     if (isLoadingMore.value || !hasMore.value || _fetchingMore) return;
     final tabForRequest = _activeTab;
     _fetchingMore = true;
@@ -272,6 +465,12 @@ class OrderListController extends GetxController {
         totalTips.value = fallbackTips;
         totalCompleted.value = fallbackCompleted;
         totalDeliveryCharge.value = totalEarnings.value - totalTips.value;
+
+        print("CONTROLLER UPDATED");
+        print("totalEarnings => ${totalEarnings.value}");
+        print("totalTips => ${totalTips.value}");
+        print("totalOrders => ${totalOrders.value}");
+        print("totalCompleted => ${totalCompleted.value}");
       }
     } catch (e) {
       log('_handleSuccess() parse error: $e');
