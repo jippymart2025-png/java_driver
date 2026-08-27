@@ -9,6 +9,7 @@ import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/services/audio_player_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:get/get.dart';
 
@@ -22,20 +23,45 @@ class HomeScreenMultipleOrderController extends GetxController {
 
   @override
   void onInit() {
-    // TODO: implement onInt
     getDriver();
     super.onInit();
   }
   getDriver() async {
     try {
       String? userId = await LoginController.getFirebaseId();
+      final headers = await getHeaders();
 
-      final response = await http.get(Uri.parse("${Constant.baseUrl}users/$userId"));
+      final response = await http.get(
+        Uri.parse("${Constant.baseUrl}driver/getDriverDetails?driverId=$userId"),
+        headers: headers,
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data["success"] == true && data["data"] != null) {
-          driverModel.value = UserModel.fromJson(data["data"]);
+
+        Map<String, dynamic> userDetails;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('data') && data['data'] is Map) {
+            userDetails = data['data'] as Map<String, dynamic>;
+          } else {
+            userDetails = data;
+          }
+        } else {
+          userDetails = {};
+        }
+
+        if (userDetails.isNotEmpty) {
+          if (!userDetails.containsKey('role')) {
+            userDetails['role'] = Constant.userRoleDriver;
+          }
+          if (!userDetails.containsKey('active')) {
+            userDetails['active'] = true;
+          }
+          if (!userDetails.containsKey('isActive')) {
+            userDetails['isActive'] = true;
+          }
+
+          driverModel.value = UserModel.fromJson(userDetails);
           Constant.userModel = driverModel.value;
           newOrder.clear();
           activeOrder.clear();

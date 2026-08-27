@@ -155,10 +155,10 @@ class LoginController extends GetxController {
         unawaited(DriverLocationSync.syncDeviceLocationIntoUserModel());
       });
 
-      if (userModel.isDocumentVerify != true) {
-        Future.delayed(const Duration(milliseconds: 120),
-                () => Get.to(() => const VerificationScreen()));
-      }
+      // if (userModel.isDocumentVerify != true) {
+      //   Future.delayed(const Duration(milliseconds: 120),
+      //           () => Get.to(() => const VerificationScreen()));
+      // }
     } catch (e) {
       log('redirectScreen error: $e');
       Get.offAll(const LoginScreen());

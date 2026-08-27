@@ -404,16 +404,16 @@ void _showWalletUpdatedPopup() {
       orderModel.value.toPay = amountToCollect.toStringAsFixed(2);
       print('[DeliverOrderController] Set ToPay: ${orderModel.value.toPay}');
       // Update wallet and delivery amount via separate APIs first
-      final ok = await OrderWorkflowService.completeDeliveryOrderBackend(
-        order: orderModel.value,
-        driverModel: homeController.driverModel.value,
-      );
-
-      if (ok != true) {
-        ShowToastDialog.closeLoader();
-        ShowToastDialog.showToast("Failed to complete order".tr);
-        return;
-      }
+      // final ok = await OrderWorkflowService.completeDeliveryOrderBackend(
+      //   order: orderModel.value,
+      //   driverModel: homeController.driverModel.value,
+      // );
+      //
+      // if (ok != true) {
+      //   ShowToastDialog.closeLoader();
+      //   ShowToastDialog.showToast("Failed to complete order".tr);
+      //   return;
+      // }
 
       // Bonus popup depends on updated completion stats.
       deliveryAmountBonusAmount();

@@ -236,8 +236,10 @@ class UserModel {
   UserModel.fromJson(Map<String, dynamic> json) {
     if (json['id'] != null) {
       id = json['id'].toString();
+    } else if (json['driverId'] != null) {
+      id = json['driverId'].toString();
     }
-    firebaseId = json['firebase_id']?.toString() ?? json['id']?.toString();
+    firebaseId = json['firebase_id']?.toString() ?? json['id']?.toString() ?? json['driverId']?.toString();
     email = json['email'];
     firstName = json['firstName'];
     lastName = json['lastName'];
@@ -308,8 +310,8 @@ class UserModel {
       return null;
     }
 
-    active = _parseNullableBool(json['active']);
-    isActive = _parseNullableBool(json['isActive']);
+    active = _parseNullableBool(json['active']) ?? true;
+    isActive = _parseNullableBool(json['isActive']) ?? true;
     // Backend may send one of the two keys; mirror to avoid accidental false writes.
     if (active == null && isActive != null) active = isActive;
     if (isActive == null && active != null) isActive = active;
@@ -318,7 +320,7 @@ class UserModel {
         json['isDocumentVerify'] == true ||
         json['isDocumentVerify'] == 1;
     print("isDocumentVerify  $isDocumentVerify");
-    role = json['role'] ?? 'user';
+    role = json['role'] ?? 'driver';
 
     // Fix for location handling - check if it's a string that needs parsing
     if (json['location'] != null) {

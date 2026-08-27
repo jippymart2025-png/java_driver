@@ -44,8 +44,8 @@ class ProfileController extends GetxController {
 
     final updated = UserModel.fromJson(_dashCtrl.userModel.value.toJson());
     updated.isActive          = value;
-    updated.inProgressOrderID = Constant.userModel?.inProgressOrderID;
-    updated.orderRequestData  = Constant.userModel?.orderRequestData;
+    // updated.inProgressOrderID = Constant.userModel?.inProgressOrderID;
+    // updated.orderRequestData  = Constant.userModel?.orderRequestData;
 
     _dashCtrl.userModel.value = updated;
 
@@ -88,10 +88,10 @@ class ProfileController extends GetxController {
       return;
     }
 
-    if (index == 1) {
-      Get.to(() => const VerificationScreen());
-      return;
-    }
+    // if (index == 1) {
+    //   Get.to(() => const VerificationScreen());
+    //   return;
+    // }
 
     if (index == 2) {
       Get.to(() => const TermsAndConditionScreen(type: "terms"));

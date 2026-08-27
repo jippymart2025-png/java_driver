@@ -908,19 +908,17 @@ class _CardHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 5),
-              Row(
-                children: [
-                  Text(
-                    Constant.orderId(orderId: order.id.toString()),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _sub,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  _StatusChip(status: order.status ?? ''),
-                ],
+              Text(
+                Constant.orderId(orderId: order.id.toString()),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: _sub,
+                ),
               ),
+              const SizedBox(height: 4),
+              _StatusChip(status: order.status ?? ''),
             ],
           ),
         ),
@@ -1601,13 +1599,17 @@ class _StatusChip extends StatelessWidget {
             color: color,
           ),
           const SizedBox(width: 4),
-          Text(
-            s,
-            style: TextStyle(
-              fontFamily: AppThemeData.bold,
-              fontSize: 10,
-              color: color,
-              letterSpacing: 0.3,
+          Flexible(
+            child: Text(
+              s,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: AppThemeData.bold,
+                fontSize: 10,
+                color: color,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
         ],

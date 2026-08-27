@@ -1,15 +1,11 @@
 import 'dart:async';
 import 'package:android_pip/android_pip.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart' as flutterMap;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:latlong2/latlong.dart' as latlng;
 import 'package:provider/provider.dart';
 import 'package:timelines_plus/timelines_plus.dart';
-
 import 'package:jippydriver_driver/app/chat_screens/chat_screen.dart';
 import 'package:jippydriver_driver/app/home_screen/screens/delivery_order_screen/deliver_order_screen.dart';
 import 'package:jippydriver_driver/app/home_screen/screens/pickup_order_screen/pickup_order_screen.dart';
@@ -25,10 +21,8 @@ import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/responsive.dart';
 import 'package:jippydriver_driver/themes/round_button_fill.dart';
-import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
-import 'package:jippydriver_driver/utils/utils.dart';
 import 'package:jippydriver_driver/widget/my_separator.dart';
 
 import '../../widget/expandable_address_text.dart';
@@ -159,11 +153,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildBody(DarkThemeProvider theme, HomeController ctrl) {
     // Document-verification pending screen
-    if (Constant.userModel?.vendorID?.isEmpty == true &&
-        Constant.isDriverVerification == true &&
-        Constant.userModel?.isDocumentVerify == false) {
-      return _buildVerificationPending(theme);
-    }
+    // if (Constant.userModel?.vendorID?.isEmpty == true &&
+    //     Constant.isDriverVerification == true &&
+    //     Constant.userModel?.isDocumentVerify == false) {
+    //   return _buildVerificationPending(theme);
+    // }
 
     final walletBalance = double.tryParse(
             Constant.userModel!.walletAmount?.toString() ?? '0') ??

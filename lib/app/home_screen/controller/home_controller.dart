@@ -3005,7 +3005,7 @@ class HomeController extends GetxController {
       markerId: const MarkerId('Driver'),
       position: pos,
       icon: taxiIcon!,
-      rotation: (driverModel.value.rotation ?? 0.0).toDouble(),
+      // rotation: (driverModel.value.rotation ?? 0.0).toDouble(),
       anchor: const Offset(0.5, 0.5),
     );
     markers.value = updated;
@@ -4294,22 +4294,44 @@ class HomeController extends GetxController {
     try {
       final h   = HttpClientService();
       final res = await h.get(
-        Uri.parse('${Constant.baseUrl}users/$userId'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
+        Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$userId'),
+        headers: await getHeaders(),
         cacheStrategy: CacheStrategy.driverProfile,
         useCache: true,
         timeout: const Duration(seconds: 10),
       );
       if (res.statusCode == 200) {
         final j = jsonDecode(res.body);
-        if (j['success'] == true && j['data'] != null) {
+
+        Map<String, dynamic> userDetails;
+        if (j is Map<String, dynamic>) {
+          if (j.containsKey('data') && j['data'] is Map) {
+            userDetails = j['data'] as Map<String, dynamic>;
+          } else {
+            userDetails = j;
+          }
+        } else {
+          userDetails = {};
+        }
+
+        if (userDetails.isNotEmpty) {
+          if (!userDetails.containsKey('role')) {
+            userDetails['role'] = Constant.userRoleDriver;
+          }
+          if (!userDetails.containsKey('active')) {
+            userDetails['active'] = true;
+          }
+          if (!userDetails.containsKey('isActive')) {
+            userDetails['isActive'] = true;
+          }
+
           final prev   = driverModel.value.orderRequestData?.toList();
-          final parsed = UserModel.fromJson(j['data']);
+          final parsed = UserModel.fromJson(userDetails);
           _filterCompletedFromUser(parsed);
           driverModel.value = parsed;
+          if (Constant.userModel == null || Constant.userModel!.id == null) {
+            Constant.userModel = parsed;
+          }
 
           if (driverModel.value.id != null) {
             isLoading.value = false;
@@ -4339,6 +4361,16 @@ class HomeController extends GetxController {
       }
     } catch (e) {
       AppLogger.log('getDriver error: $e', tag: 'API');
+    } finally {
+      // Always release the loader so the home screen never stays stuck,
+      // even if the API call fails or returns no driver id. Fall back to the
+      // in-memory user so existing data still renders.
+      if (isLoading.value) {
+        if (driverModel.value.id == null && Constant.userModel != null) {
+          driverModel.value = Constant.userModel!;
+        }
+        isLoading.value = false;
+      }
     }
   }
 
@@ -4581,16 +4613,13 @@ class HomeController extends GetxController {
       final userId = await LoginController.getFirebaseId();
       final prev   = driverModel.value.orderRequestData?.toList();
 
-      final headers = <String, String>{
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      };
+      final headers = await getHeaders();
       if (_lastETag     != null) headers['If-None-Match']     = _lastETag!;
       if (_lastModified != null) headers['If-Modified-Since'] = _lastModified!;
 
       final h   = HttpClientService();
       final res = await h.get(
-        Uri.parse('${Constant.baseUrl}users/$userId'),
+        Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$userId'),
         headers: headers,
         cacheStrategy: CacheStrategy.driverProfile,
         useCache: true,
@@ -4606,9 +4635,31 @@ class HomeController extends GetxController {
       if (lm   != null) _lastModified = lm;
 
       final j = jsonDecode(res.body);
-      if (j['success'] != true) return false;
 
-      final parsed = UserModel.fromJson(j['data']);
+      Map<String, dynamic> userDetails;
+      if (j is Map<String, dynamic>) {
+        if (j.containsKey('data') && j['data'] is Map) {
+          userDetails = j['data'] as Map<String, dynamic>;
+        } else {
+          userDetails = j;
+        }
+      } else {
+        return false;
+      }
+
+      if (userDetails.isEmpty) return false;
+
+      if (!userDetails.containsKey('role')) {
+        userDetails['role'] = Constant.userRoleDriver;
+      }
+      if (!userDetails.containsKey('active')) {
+        userDetails['active'] = true;
+      }
+      if (!userDetails.containsKey('isActive')) {
+        userDetails['isActive'] = true;
+      }
+
+      final parsed = UserModel.fromJson(userDetails);
       _filterCompletedFromUser(parsed);
       driverModel.value = parsed;
 

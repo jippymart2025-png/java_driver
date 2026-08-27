@@ -423,6 +423,7 @@ import 'package:jippydriver_driver/controllers/login_controller.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/driver_location_sync.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/preferences.dart';
@@ -551,14 +552,37 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
     if (userId == null) return;
 
     try {
+      final headers = await getHeaders();
       final res = await http
-          .get(Uri.parse('${Constant.baseUrl}users/$userId'))
+          .get(Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$userId'), headers: headers)
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true && data['data'] != null) {
-          final parsed = UserModel.fromJson(data['data']);
+
+        Map<String, dynamic> userDetails;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('data') && data['data'] is Map) {
+            userDetails = data['data'] as Map<String, dynamic>;
+          } else {
+            userDetails = data;
+          }
+        } else {
+          userDetails = {};
+        }
+
+        if (userDetails.isNotEmpty) {
+          if (!userDetails.containsKey('role')) {
+            userDetails['role'] = Constant.userRoleDriver;
+          }
+          if (!userDetails.containsKey('active')) {
+            userDetails['active'] = true;
+          }
+          if (!userDetails.containsKey('isActive')) {
+            userDetails['isActive'] = true;
+          }
+
+          final parsed = UserModel.fromJson(userDetails);
           userModel.value   = parsed;
           Constant.userModel = parsed;
           AppLogger.log('User fetched: ${parsed.fullName()}', tag: 'Dashboard');
@@ -710,7 +734,7 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
       if (!Get.isRegistered<HomeController>()) return;
       final home = Get.find<HomeController>();
       home.driverModel.value.location = loc;
-      if (heading != null) home.driverModel.value.rotation = heading;
+      // if (heading != null) home.driverModel.value.rotation = heading;
 
       if (loc.latitude != null && loc.longitude != null) {
         try {
@@ -782,7 +806,7 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
       if (currentUser.isActive != true) return;
 
       currentUser.location = newLoc;
-      if (heading != null) currentUser.rotation = heading;
+      // if (heading != null) currentUser.rotation = heading;
       Constant.userModel = currentUser;
 
       // Avoid read-before-write by using in-memory user model.

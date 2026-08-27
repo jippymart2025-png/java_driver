@@ -765,13 +765,13 @@ class OrderDetailsScreen extends StatelessWidget {
                                   const SizedBox(
                                     height: 10,
                                   ),
-                                  controller.orderModel.value.takeAway ==
-                                              true ||
-                                          Constant.userModel?.vendorID
-                                                  ?.isNotEmpty ==
-                                              true
-                                      ? const SizedBox()
-                                      : Row(
+                                  // controller.orderModel.value.takeAway ==
+                                  //             true ||
+                                  //         Constant.userModel?.vendorID
+                                  //                 ?.isNotEmpty ==
+                                  //             true
+                                  //     ? const SizedBox()
+                                       Row(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
@@ -909,13 +909,13 @@ class OrderDetailsScreen extends StatelessWidget {
                                   const SizedBox(
                                     height: 10,
                                   ),
-                                  controller.orderModel.value.takeAway ==
-                                              true ||
-                                          Constant.userModel?.vendorID
-                                                  ?.isNotEmpty ==
-                                              true
-                                      ? const SizedBox()
-                                      : Row(
+                                  // controller.orderModel.value.takeAway ==
+                                  //             true ||
+                                  //         Constant.userModel?.vendorID
+                                  //                 ?.isNotEmpty ==
+                                  //             true
+                                  //     ? const SizedBox()
+                                   Row(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [

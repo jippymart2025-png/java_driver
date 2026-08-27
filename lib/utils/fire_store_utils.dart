@@ -91,7 +91,7 @@ class FireStoreUtils {
     String? userId =await  LoginController.getFirebaseId();
     try {
       isLogin = await userExistOrNot(userId)
-          .timeout(const Duration(seconds: 10), onTimeout: () {
+          .timeout(const Duration(seconds: 6), onTimeout: () {
         log("isLogin timeout - returning false");
         return false;
       });
@@ -105,7 +105,7 @@ class FireStoreUtils {
     try {
       final response = await http.get(
         Uri.parse('${Constant.baseUrl}driver-sql/users/$uid/exists'),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         if (data['success'] == true) {
@@ -141,8 +141,8 @@ class FireStoreUtils {
       try {
         final httpClient = HttpClientService();
         final response = await httpClient.get(
-          Uri.parse('${Constant.baseUrl}users/$uuid'),
-          headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+          Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$uuid'),
+          headers: await getHeaders(),
           cacheStrategy: CacheStrategy.driverProfile,
           customTTL: _profileCacheTtl,
           useCache: !forceRefresh,
@@ -152,8 +152,29 @@ class FireStoreUtils {
         if (response.statusCode == 200) {
           final cleaned = sanitizeHttpJsonBody(response.body);
           final Map<String, dynamic> data = json.decode(cleaned);
-          if (data['success'] == true && data['data'] != null) {
-            final user = UserModel.fromJson(data['data']);
+
+          Map<String, dynamic> userDetails;
+          if (data.containsKey('data') && data['data'] is Map) {
+            userDetails = data['data'] as Map<String, dynamic>;
+          } else {
+            userDetails = data;
+          }
+
+          if (userDetails.isNotEmpty) {
+            if (userDetails.containsKey('driverId') && !userDetails.containsKey('id')) {
+              userDetails['id'] = userDetails['driverId'];
+            }
+            if (!userDetails.containsKey('role')) {
+              userDetails['role'] = 'driver';
+            }
+            if (!userDetails.containsKey('active')) {
+              userDetails['active'] = true;
+            }
+            if (!userDetails.containsKey('isActive')) {
+              userDetails['isActive'] = true;
+            }
+
+            final user = UserModel.fromJson(userDetails);
             _profileCache[uuid] = _ProfileCacheEntry(
               user: user,
               cachedAt: DateTime.now(),
@@ -647,7 +668,8 @@ class FireStoreUtils {
         cacheStrategy: CacheStrategy.settings, // 24 hours cache
         useCache: !forceRefresh,
         forceRefresh: forceRefresh,
-        timeout: const Duration(seconds: 15),
+        timeout: const Duration(seconds: 5),
+        enableRetry: false,
       );
       if (response.statusCode == 200) {
         // Check for HTML responses (error pages)
@@ -856,7 +878,7 @@ class FireStoreUtils {
       final response = await http.get(
         Uri.parse('${Constant.baseUrl}driver-sql/forceupdate'),
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      );
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode != 200) return false;
       final decoded = json.decode(response.body);
       final Map<String, dynamic> data = decoded is Map && decoded['data'] != null

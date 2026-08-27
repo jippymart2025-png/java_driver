@@ -29,7 +29,8 @@ class GlobalSettingController extends GetxController {
         uri,
         cacheStrategy: CacheStrategy.settings, // 24 hours cache
         useCache: true,
-        timeout: const Duration(seconds: 20),
+        timeout: const Duration(seconds: 5),
+        enableRetry: false,
       );
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);

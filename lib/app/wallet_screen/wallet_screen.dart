@@ -65,63 +65,71 @@ class WalletScreen extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                       child: Row(
                         children: [
-                          GestureDetector(
-                            onTap: () => controller.isIncentiveTab.value = false,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Transaction History'.tr,
-                                  style: TextStyle(
-                                    fontFamily: AppThemeData.semiBold,
-                                    fontSize: 17,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => controller.isIncentiveTab.value = false,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Transaction History'.tr,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: AppThemeData.semiBold,
+                                      fontSize: 17,
+                                      color: !controller.isIncentiveTab.value
+                                          ? AppThemeData.secondary300
+                                          : (isDark
+                                          ? AppThemeData.grey400
+                                          : AppThemeData.grey500),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    height: 2,
+                                    width: double.infinity,
                                     color: !controller.isIncentiveTab.value
                                         ? AppThemeData.secondary300
-                                        : (isDark
-                                        ? AppThemeData.grey400
-                                        : AppThemeData.grey500),
+                                        : Colors.transparent,
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  height: 2,
-                                  width: 120,
-                                  color: !controller.isIncentiveTab.value
-                                      ? AppThemeData.secondary300
-                                      : Colors.transparent,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
 
-                          const SizedBox(width: 90),
+                          const SizedBox(width: 16),
 
-                          GestureDetector(
-                            onTap: () => controller.isIncentiveTab.value = true,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Incentive History'.tr,
-                                  style: TextStyle(
-                                    fontFamily: AppThemeData.semiBold,
-                                    fontSize: 17,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => controller.isIncentiveTab.value = true,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Incentive History'.tr,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: AppThemeData.semiBold,
+                                      fontSize: 17,
+                                      color: controller.isIncentiveTab.value
+                                          ? AppThemeData.secondary300
+                                          : (isDark
+                                          ? AppThemeData.grey400
+                                          : AppThemeData.grey500),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    height: 2,
+                                    width: double.infinity,
                                     color: controller.isIncentiveTab.value
                                         ? AppThemeData.secondary300
-                                        : (isDark
-                                        ? AppThemeData.grey400
-                                        : AppThemeData.grey500),
+                                        : Colors.transparent,
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  height: 2,
-                                  width: 100,
-                                  color: controller.isIncentiveTab.value
-                                      ? AppThemeData.secondary300
-                                      : Colors.transparent,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ],

@@ -460,16 +460,16 @@ final selectedState = Rxn<StateModel>();
       ..lastName = lastNameEditingController.value.text.trim()
       ..email = emailEditingController.value.text.trim().toLowerCase()
       ..phoneNumber = phoneNUmberEditingController.value.text.trim()
-      ..role = Constant.userRoleDriver
+      // ..role = Constant.userRoleDriver
       ..fcmToken = await NotificationService.getToken()
       ..active = Constant.autoApproveDriver == true
       ..isDocumentVerify = Constant.isDriverVerification != true
       ..countryCode = countryCodeEditingController.value.text
-      ..createdAt = Timestamp.now()
+      ..createdAt = Timestamp.now();
       //..createdAt = DateTime.now()
       //..zoneId = selectedZone.value.id
-      ..appIdentifier = Platform.isAndroid ? 'android' : 'ios'
-      ..provider = provider ?? userModel.value.provider;
+      // ..appIdentifier = Platform.isAndroid ? 'android' : 'ios'
+      // ..provider = provider ?? userModel.value.provider;
   }
 
   Future<void> signUpWithEmailAndPassword() async {
@@ -514,134 +514,134 @@ final selectedState = Rxn<StateModel>();
 
 
   Future<void> _signupWithApi() async {
-    // final body = {
-    //   'type': 'email',
-    //   'first_name': firstNameEditingController.value.text.trim(),
-    //   'last_name': lastNameEditingController.value.text.trim(),
-    //   'email': emailEditingController.value.text.trim().toLowerCase(),
-    //   'password': passwordEditingController.value.text.trim(),
-    //   'phone_number': phoneNUmberEditingController.value.text.trim(),
-    //   'country_code': countryCodeEditingController.value.text,
-    //   //'zone_id': selectedZone.value.id,
-    //   'fcm_token': await NotificationService.getToken(),
-    //   'app_identifier': Platform.isAndroid ? 'android' : 'ios',
-    // };
-
     final body = {
-      "firstName":
-      firstNameEditingController.value.text.trim(),
-
-      "lastName":
-      lastNameEditingController.value.text.trim(),
-
-      "phoneNumber":
-      phoneNUmberEditingController.value.text.trim(),
-
-      "email":
-      emailEditingController.value.text.trim().toLowerCase(),
-
-      "nomineeName":
-      nomineeNameEditingController.value.text.trim(),
-
-      "nomineePhoneNumber":
-      nomineePhoneEditingController.value.text.trim(),
-
-      "familyMemberName":
-      familyMemberNameEditingController.value.text.trim(),
-
-      "familyMemberPhoneNumber":
+      'firstName': firstNameEditingController.value.text.trim(),
+      'lastName': lastNameEditingController.value.text.trim(),
+      'phoneNumber': phoneNUmberEditingController.value.text.trim(),
+      'email': emailEditingController.value.text.trim().toLowerCase(),
+      'nomineeName': nomineeNameEditingController.value.text.trim(),
+      'nomineePhoneNumber': nomineePhoneEditingController.value.text.trim(),
+      'familyMemberName': familyMemberNameEditingController.value.text.trim(),
+      'familyMemberPhoneNumber':
       familyMemberPhoneEditingController.value.text.trim(),
-
-      "aadharNumber":
-      aadharNumberEditingController.value.text.trim(),
-
-      "drivingLicenseNumber":
+      'aadharNumber': aadharNumberEditingController.value.text.trim(),
+      'drivingLicenseNumber':
       drivingLicenseEditingController.value.text.trim(),
+      'buildingNumber': buildingNumberEditingController.value.text.trim(),
+      'road': roadEditingController.value.text.trim(),
+      'landmark': landmarkEditingController.value.text.trim(),
+      'stateId': selectedState.value?.stateId,
+      'cityId': selectedCity.value?.cityId,
+      'areaId': selectedArea.value?.areaId,
+      'password': passwordEditingController.value.text.trim(),
 
-      "buildingNumber":
-      buildingNumberEditingController.value.text.trim(),
-
-      "road":
-      roadEditingController.value.text.trim(),
-
-      "landmark":
-      landmarkEditingController.value.text.trim(),
-
-      "stateId":
-      selectedState.value?.stateId,
-
-      "cityId":
-      selectedCity.value?.cityId,
-
-      "areaId":
-      selectedArea.value?.areaId,
-
-      "password":
-      passwordEditingController.value.text.trim(),
-
-      // Temporary until actual RC upload is implemented
-      "rcCopy": rcNumberEditingController.value.text.trim().isEmpty
-          ? "temp_rc_copy"
+      // Temporary RC value
+      'rcCopy': rcNumberEditingController.value.text.trim().isEmpty
+          ? 'temp_rc_copy'
           : rcNumberEditingController.value.text.trim(),
     };
 
-    log('Signup request: ${const JsonEncoder.withIndent('  ').convert(body)}');
-    log('API URL: ${Constant.baseUrl}drivers/signup');
-    final response = await http.post(
-      //Uri.parse('${Constant.baseUrl}drivers/signup'),
-      Uri.parse(
-      '${Constant.baseUrl}driver/postDriverDetails',
-      ),
-      headers: await getHeaders(),
-      body: json.encode(body),
-    )
-.timeout(const Duration(seconds: 30));
-
-    log('Signup response [${response.statusCode}]: ${response.body}');
-
-    // final responseData =
-    // json.decode(response.body) as Map<String, dynamic>;
-
-    Map<String, dynamic> responseData = {};
-
     try {
-      responseData =
-      json.decode(response.body) as Map<String, dynamic>;
-    } catch (e) {
-      ShowToastDialog.showToast('Invalid server response'.tr);
-      return;
-    }
-
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-
-      await _buildUserModel(
-        id: responseData['driverId']?.toString(),
-        provider: 'email',
+      log(
+        'Signup Request: '
+            '${const JsonEncoder.withIndent('  ').convert(body)}',
       );
 
-      log("Driver ID from Java API: ${responseData['driverId']}");
-      final updated =
-      await _updateUserWithoutIsActive(userModel.value);
+      final url = Uri.parse(
+        '${Constant.baseUrl}driver/postDriverDetails',
+      );
 
-      if (updated) {
-        _handlePostSignup();
-      } else {
+      log('Signup API URL: $url');
+
+      final response = await http
+          .post(
+        url,
+        headers: await getHeaders(),
+        body: jsonEncode(body),
+      )
+          .timeout(
+        const Duration(seconds: 30),
+      );
+
+      log(
+        'Signup Response [${response.statusCode}]: '
+            '${response.body}',
+      );
+
+      Map<String, dynamic> responseData;
+
+      try {
+        final decodedResponse = jsonDecode(response.body);
+
+        if (decodedResponse is Map<String, dynamic>) {
+          responseData = decodedResponse;
+        } else {
+          ShowToastDialog.showToast(
+            'Invalid server response'.tr,
+          );
+          return;
+        }
+      } catch (e) {
+        log('JSON Decode Error: $e');
+
         ShowToastDialog.showToast(
-          'Failed to save user data',
+          'Invalid server response'.tr,
         );
+
+        return;
       }
 
-    } else {
+      // ============================
+      // SUCCESS
+      // ============================
+
+      if (response.statusCode == 200 ||
+          response.statusCode == 201) {
+        final driverId = responseData['driverId'];
+
+        log('Driver ID: $driverId');
+
+        ShowToastDialog.showToast(
+          responseData['message']?.toString() ??
+              'Registration successful. Please login.',
+        );
+
+        // Go to Login Screen
+        Get.offAll(
+              () => const LoginScreen(),
+        );
+
+        return;
+      }
+
+      // ============================
+      // API ERROR
+      // ============================
 
       ShowToastDialog.showToast(
         responseData['message']?.toString() ??
             'Signup failed',
       );
+    } on TimeoutException {
+      log('Signup API request timed out');
 
+      ShowToastDialog.showToast(
+        'Request timed out. Please try again.'.tr,
+      );
+    } on SocketException {
+      log('Signup API network error');
+
+      ShowToastDialog.showToast(
+        'No internet connection. Please try again.'.tr,
+      );
+    } catch (e) {
+      log('Signup API Error: $e');
+
+      ShowToastDialog.showToast(
+        'Something went wrong. Please try again.'.tr,
+      );
     }
   }
-
   Future<bool> _updateUserWithoutIsActive(UserModel user) async {
     try {
       final payload = user.toJson();

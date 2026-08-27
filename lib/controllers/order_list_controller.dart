@@ -12,6 +12,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:jippydriver_driver/models/vendor_model.dart';
 import 'dart:async';
 
+import 'package:jippydriver_driver/utils/common.dart';
+
 /// Report tabs map to `ordersReport` query `type`: upcoming / settled, or omitted for all.
 enum OrderListTab { upcoming, settled, all }
 
@@ -82,12 +84,11 @@ class OrderListController extends GetxController {
 
     try {
       isLoading.value = true;
-      print("HEADERS => $_headers");
       final response = await http.get(
         Uri.parse(
-          'http://187.127.156.147:8084/api/driver/fetchOrderEarningsHistory?driverId=1',
+          '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=${Constant.userModel?.firebaseId}',
         ),
-        headers: _headers,
+        headers: await getHeaders(),
       );
 
       print("STATUS => ${response.statusCode}");
@@ -165,10 +166,9 @@ class OrderListController extends GetxController {
       final response = await http
           .get(
         Uri.parse(
-          'http://187.127.156.147:8084/api/driver/fetchTotalEarnings?driverId=1',
-          //'http://187.127.156.147:8084/api/driver/fetchTotalEarnings?driverId=$driverId',
+          '${Constant.baseUrl}driver/fetchTotalEarnings?driverId=${Constant.userModel?.firebaseId}',
         ),
-        headers: _headers,
+        headers: await getHeaders(),
       )
           .timeout(const Duration(seconds: 15));
 
@@ -237,7 +237,10 @@ class OrderListController extends GetxController {
 
   Future<void> refreshCurrentTab() async {
     _cache[_activeTab]!.hasLoadedOnce = false;
-    await getOrder();
+    await Future.wait([
+      fetchOrderHistory(),
+      fetchTotalEarnings(),
+    ]);
   }
 
   void _copyObservablesToCache(OrderListTab tab) {
@@ -281,7 +284,7 @@ class OrderListController extends GetxController {
 
     return Uri.parse(
 
-      'http://187.127.156.147:8084/api/driver/fetchOrderEarningsHistory?driverId=1',
+      '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=$driverId',
     );
   }
 
@@ -315,17 +318,8 @@ class OrderListController extends GetxController {
     // );
 
 
-  Map<String, String> get _headers => {
-
-        'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'Authorization' : ' eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE3ODU0MjcsImV4cCI6MTc4MTg3MTgyN30.a_DpO9hDp_TaV7LXNGGrU3G9ecNQYRYth3YlCtiLM8g',
-
-  };
-
   Future<void> getOrder() async {
     print("GET ORDER BLOCKED");
-    return;
     if (_fetchingFirstPage) return;
     final tabForRequest = _activeTab;
     _fetchingFirstPage = true;
@@ -347,7 +341,7 @@ class OrderListController extends GetxController {
       );
 
       final response = await http
-          .get(_buildOrdersUrl(tab: tabForRequest, page: 1), headers: _headers)
+          .get(_buildOrdersUrl(tab: tabForRequest, page: 1), headers: await getHeaders())
           .timeout(const Duration(seconds: 15));
 
       if (_activeTab != tabForRequest) return;
@@ -380,7 +374,6 @@ class OrderListController extends GetxController {
   }
 
   Future<void> loadMore() async {
-    return;
     if (isLoadingMore.value || !hasMore.value || _fetchingMore) return;
     final tabForRequest = _activeTab;
     _fetchingMore = true;
@@ -390,7 +383,7 @@ class OrderListController extends GetxController {
       final nextPage = _currentPage + 1;
 
       final response = await http
-          .get(_buildOrdersUrl(tab: tabForRequest, page: nextPage), headers: _headers)
+          .get(_buildOrdersUrl(tab: tabForRequest, page: nextPage), headers: await getHeaders())
           .timeout(const Duration(seconds: 15));
 
       if (_activeTab != tabForRequest) return;
