@@ -60,6 +60,9 @@ class SignupController extends GetxController {
   final buildingNumberEditingController =
       TextEditingController().obs;
 
+  final latitude = 0.0.obs;
+  final longitude = 0.0.obs;
+
   final roadEditingController =
       TextEditingController().obs;
 
@@ -534,6 +537,8 @@ final selectedState = Rxn<StateModel>();
       'cityId': selectedCity.value?.cityId,
       'areaId': selectedArea.value?.areaId,
       'password': passwordEditingController.value.text.trim(),
+      'latitude' : latitude.value,
+      'longitude' : longitude.value,
 
       // Temporary RC value
       'rcCopy': rcNumberEditingController.value.text.trim().isEmpty

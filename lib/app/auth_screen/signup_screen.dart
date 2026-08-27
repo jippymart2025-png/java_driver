@@ -19,6 +19,8 @@ import 'package:jippydriver_driver/models/state_model.dart';
 import 'package:jippydriver_driver/models/city_model.dart';
 import 'package:jippydriver_driver/models/area_model.dart';
 
+import '../SelectLocationScreen/SelectLocationScreen.dart';
+
 /// OPTIMIZATIONS:
 /// 1. Single AnimationController replaces 11 separate TweenAnimationBuilders.
 /// 2. Validation logic moved to SignupController.validateAndSignup().
@@ -450,9 +452,56 @@ class _SignupScreenState extends State<SignupScreen>
                     slide: _slideAnims[13],
                     child: TextFieldWidget(
                       title: 'Building Number'.tr,
-                      controller: controller.buildingNumberEditingController.value,
-                      hintText: 'Enter Building Number'.tr,
-                      textInputAction: TextInputAction.next,
+                      controller:
+                      controller.buildingNumberEditingController.value,
+                      hintText: 'Select location from map'.tr,
+
+                      readOnly: true,
+
+                      onTap: () async {
+                        final result = await Get.to(
+                              () => SelectLocationScreen(),
+                        );
+
+                        if (result == null) {
+                          return;
+                        }
+
+                        if (result is Map<String, dynamic>) {
+                          controller
+                              .buildingNumberEditingController
+                              .value
+                              .text =
+                              result['address']?.toString() ?? '';
+
+                          controller.latitude.value =
+                              (result['latitude'] as num?)
+                                  ?.toDouble() ??
+                                  0.0;
+
+                          controller.longitude.value =
+                              (result['longitude'] as num?)
+                                  ?.toDouble() ??
+                                  0.0;
+
+                          print(
+                            'ADDRESS: '
+                                '${controller.buildingNumberEditingController.value.text}',
+                          );
+
+                          print(
+                            'LATITUDE: ${controller.latitude.value}',
+                          );
+
+                          print(
+                            'LONGITUDE: ${controller.longitude.value}',
+                          );
+                        }
+                      },
+
+                      textInputAction:
+                      TextInputAction.next,
+
                       prefix: _FieldIcon(
                         asset: 'assets/icons/ic_location.svg',
                         isDark: isDark,

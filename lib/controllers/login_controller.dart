@@ -304,38 +304,49 @@ class LoginController extends GetxController {
 
           if (driverResponse.statusCode >= 200 &&
               driverResponse.statusCode < 300) {
-            final driverData = json.decode(driverResponse.body);
+            final driverData =
+            json.decode(driverResponse.body);
 
             Map<String, dynamic> userDetails;
+
             if (driverData is Map<String, dynamic>) {
-              if (driverData.containsKey('data') &&
-                  driverData['data'] is Map) {
-                userDetails = driverData['data'] as Map<String, dynamic>;
+              if (driverData['data'] is Map) {
+                userDetails = Map<String, dynamic>.from(
+                  driverData['data'] as Map,
+                );
               } else {
-                userDetails = driverData;
+                userDetails = Map<String, dynamic>.from(
+                  driverData,
+                );
               }
             } else {
               userDetails = {};
             }
 
             if (userDetails.isNotEmpty) {
-              // Normalize: getDriverDetails returns driverId, not id
-              if (userDetails.containsKey('driverId') &&
-                  !userDetails.containsKey('id')) {
-                userDetails['id'] = userDetails['driverId'];
-              }
-              if (!userDetails.containsKey('role')) {
-                userDetails['role'] = Constant.userRoleDriver;
-              }
-              if (!userDetails.containsKey('active')) {
-                userDetails['active'] = true;
-              }
-              if (!userDetails.containsKey('isActive')) {
-                userDetails['isActive'] = true;
-              }
+              // Parse using UserModel
+              final UserModel userModel =
+              UserModel.fromJson(userDetails);
 
-              await _saveUserToSharedPreferences(userDetails);
-              log('✅ Driver details saved to SharedPreferences');
+              // Keep the same normalized data
+              userDetails = userModel.toJson();
+
+              // Make sure role exists
+              userModel.role ??= Constant.userRoleDriver;
+
+              // Save model data
+              await _saveUserToSharedPreferences(
+                userModel.toJson(),
+              );
+
+              // Keep the model globally available
+              Constant.userModel = userModel;
+
+              log(
+                '✅ Driver UserModel loaded: '
+                    'id=${userModel.id}, '
+                    'name=${userModel.fullName()}',
+              );
             }
           } else {
             log('⚠️ getDriverDetails failed: ${driverResponse.statusCode}');

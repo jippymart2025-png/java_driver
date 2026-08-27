@@ -19,6 +19,10 @@ class TextFieldWidget extends StatelessWidget {
   final ValueChanged<String>? onchange;
   final TextInputAction? textInputAction;
 
+  // Added for clickable/read-only fields
+  final bool readOnly;
+  final VoidCallback? onTap;
+
   const TextFieldWidget({
     super.key,
     this.textInputType,
@@ -33,78 +37,214 @@ class TextFieldWidget extends StatelessWidget {
     this.inputFormatters,
     this.onchange,
     this.textInputAction,
+
+    // Added
+    this.readOnly = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final themeChange = Provider.of<DarkThemeProvider>(context);
+    final themeChange =
+    Provider.of<DarkThemeProvider>(context);
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(
+        bottom: 16,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
         children: [
           Visibility(
             visible: title != null,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
               children: [
-                Text(title ?? '', style: TextStyle(fontFamily: AppThemeData.medium, fontSize: 14, color: themeChange.getThem() ? AppThemeData.grey50 : AppThemeData.grey900)),
+                Text(
+                  title ?? '',
+                  style: TextStyle(
+                    fontFamily:
+                    AppThemeData.medium,
+                    fontSize: 14,
+                    color: themeChange.getThem()
+                        ? AppThemeData.grey50
+                        : AppThemeData.grey900,
+                  ),
+                ),
                 const SizedBox(
                   height: 5,
                 ),
               ],
             ),
           ),
+
+          // =====================================================
+          // TEXT FIELD
+          // =====================================================
+
           TextFormField(
-            keyboardType: textInputType ?? TextInputType.text,
-            textCapitalization: TextCapitalization.sentences,
+            keyboardType:
+            textInputType ??
+                TextInputType.text,
+
+            textCapitalization:
+            TextCapitalization.sentences,
+
             controller: controller,
+
+            // ===================================================
+            // READ ONLY / TAP
+            // ===================================================
+
+            readOnly: readOnly,
+            onTap: onTap,
+
+            // ===================================================
+            // EXISTING PROPERTIES
+            // ===================================================
+
             maxLines: maxLine ?? 1,
-            textInputAction: textInputAction ?? TextInputAction.done,
-            inputFormatters: inputFormatters,
-            obscureText: obscureText ?? false,
+
+            textInputAction:
+            textInputAction ??
+                TextInputAction.done,
+
+            inputFormatters:
+            inputFormatters,
+
+            obscureText:
+            obscureText ?? false,
+
             obscuringCharacter: '●',
+
             onChanged: onchange,
-            style: TextStyle(color: themeChange.getThem() ? AppThemeData.grey50 : AppThemeData.grey900, fontFamily: AppThemeData.medium),
+
+            style: TextStyle(
+              color: themeChange.getThem()
+                  ? AppThemeData.grey50
+                  : AppThemeData.grey900,
+              fontFamily:
+              AppThemeData.medium,
+            ),
+
+            // ===================================================
+            // EXISTING BOX DESIGN
+            // ===================================================
+
             decoration: InputDecoration(
-              errorStyle: const TextStyle(color: Colors.red),
+              errorStyle:
+              const TextStyle(
+                color: Colors.red,
+              ),
+
               filled: true,
-              enabled: enable ?? true,
-              contentPadding: EdgeInsets.symmetric(
-                  vertical: title == null
-                      ? 12
-                      : enable == false
-                          ? 13
-                          : 8,
-                  horizontal: 10),
-              fillColor: themeChange.getThem() ? AppThemeData.grey900 : AppThemeData.grey50,
+
+              enabled:
+              enable ?? true,
+
+              contentPadding:
+              EdgeInsets.symmetric(
+                vertical: title == null
+                    ? 12
+                    : enable == false
+                    ? 13
+                    : 8,
+                horizontal: 10,
+              ),
+
+              fillColor:
+              themeChange.getThem()
+                  ? AppThemeData.grey900
+                  : AppThemeData.grey50,
+
               prefixIcon: prefix,
+
               suffixIcon: suffix,
-              disabledBorder: UnderlineInputBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(10)),
-                borderSide: BorderSide(color: themeChange.getThem() ? AppThemeData.grey900 : AppThemeData.grey50, width: 1),
+
+              disabledBorder:
+              UnderlineInputBorder(
+                borderRadius:
+                const BorderRadius.all(
+                  Radius.circular(10),
+                ),
+                borderSide: BorderSide(
+                  color:
+                  themeChange.getThem()
+                      ? AppThemeData.grey900
+                      : AppThemeData.grey50,
+                  width: 1,
+                ),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(10)),
-                borderSide: BorderSide(color: themeChange.getThem() ? AppThemeData.driverApp300 : AppThemeData.driverApp300, width: 1),
+
+              focusedBorder:
+              OutlineInputBorder(
+                borderRadius:
+                const BorderRadius.all(
+                  Radius.circular(10),
+                ),
+                borderSide: BorderSide(
+                  color:
+                  AppThemeData.driverApp300,
+                  width: 1,
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(10)),
-                borderSide: BorderSide(color: themeChange.getThem() ? AppThemeData.grey900 : AppThemeData.grey50, width: 1),
+
+              enabledBorder:
+              OutlineInputBorder(
+                borderRadius:
+                const BorderRadius.all(
+                  Radius.circular(10),
+                ),
+                borderSide: BorderSide(
+                  color:
+                  themeChange.getThem()
+                      ? AppThemeData.grey900
+                      : AppThemeData.grey50,
+                  width: 1,
+                ),
               ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(10)),
-                borderSide: BorderSide(color: themeChange.getThem() ? AppThemeData.grey900 : AppThemeData.grey50, width: 1),
+
+              errorBorder:
+              OutlineInputBorder(
+                borderRadius:
+                const BorderRadius.all(
+                  Radius.circular(10),
+                ),
+                borderSide: BorderSide(
+                  color:
+                  themeChange.getThem()
+                      ? AppThemeData.grey900
+                      : AppThemeData.grey50,
+                  width: 1,
+                ),
               ),
-              border: OutlineInputBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(10)),
-                borderSide: BorderSide(color: themeChange.getThem() ? AppThemeData.grey900 : AppThemeData.grey50, width: 1),
+
+              border:
+              OutlineInputBorder(
+                borderRadius:
+                const BorderRadius.all(
+                  Radius.circular(10),
+                ),
+                borderSide: BorderSide(
+                  color:
+                  themeChange.getThem()
+                      ? AppThemeData.grey900
+                      : AppThemeData.grey50,
+                  width: 1,
+                ),
               ),
+
               hintText: hintText.tr,
+
               hintStyle: TextStyle(
                 fontSize: 14,
-                color: themeChange.getThem() ? AppThemeData.grey600 : AppThemeData.grey400,
-                fontFamily: AppThemeData.regular,
+                color: themeChange.getThem()
+                    ? AppThemeData.grey600
+                    : AppThemeData.grey400,
+                fontFamily:
+                AppThemeData.regular,
               ),
             ),
           ),
