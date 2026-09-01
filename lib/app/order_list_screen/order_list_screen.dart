@@ -282,10 +282,10 @@ class _DashboardHeader extends StatelessWidget {
     final double tips = ctrl.totalTips.value;
 
      /////ADDED NOW
-    print("Dashboard earnings => $earnings");
-    print("Dashboard tips => $tips");
-    print("Dashboard totalOrders => $total");
-    print("Dashboard delivered => $delivered");
+    debugPrint("Dashboard earnings => $earnings");
+    debugPrint("Dashboard tips => $tips");
+    debugPrint("Dashboard totalOrders => $total");
+    debugPrint("Dashboard delivered => $delivered");
     //////ADDED NOW
 
     return Column(

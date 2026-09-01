@@ -85,86 +85,251 @@ class LoginController extends GetxController {
 
   Future<void> redirectScreen() async {
     final userId = await LoginController.getFirebaseId();
-    log('redirectScreen userId=$userId');
+
+    log('======================================');
+    log('redirectScreen()');
+    log('Firebase userId: $userId');
+    log('======================================');
 
     try {
-      if (Preferences.getBoolean(Preferences.isFinishOnBoardingKey) == false) {
-        Get.offAll(const OnBoardingScreen());
+      // ---------------------------------------------------------
+      // 1. Check onboarding
+      // ---------------------------------------------------------
+      final isOnboardingFinished =
+      Preferences.getBoolean(Preferences.isFinishOnBoardingKey);
+
+      if (isOnboardingFinished == false) {
+        log('Onboarding not completed');
+
+        Get.offAll(
+              () => const OnBoardingScreen(),
+        );
+
         return;
       }
 
+      // ---------------------------------------------------------
+      // 2. Check login
+      // ---------------------------------------------------------
       final isLoggedIn = await isUserLoggedIn();
+
       if (!isLoggedIn) {
-        Get.offAll(const LoginScreen());
+        log('User is not logged in');
+
+        Get.offAll(
+              () => const LoginScreen(),
+        );
+
         return;
       }
 
-      // Try old server first, fall back to SharedPreferences
+      // ---------------------------------------------------------
+      // 3. Load user from NEW SERVER / SharedPreferences
+      // ---------------------------------------------------------
+      //
+      // IMPORTANT:
+      // Do NOT load Firestore user first here.
+      //
+      // Your new API returns:
+      //
+      // "isApproved": true
+      //
+      // UserModel converts that into:
+      //
+      // isDocumentVerify = true
+      //
+      // So SharedPreferences/new-server data should be
+      // the authoritative source.
+      // ---------------------------------------------------------
+
       UserModel? userModel;
 
       try {
-        final isLogin = await FireStoreUtils.isLogin();
-        if (isLogin) {
-          userModel = await FireStoreUtils.getUserProfile(userId);
+        userModel = await getUserFromSharedPreferences();
+      } catch (e, stackTrace) {
+        log(
+          'getUserFromSharedPreferences failed: $e',
+          stackTrace: stackTrace,
+        );
+      }
+
+      // ---------------------------------------------------------
+      // 4. User not found
+      // ---------------------------------------------------------
+      if (userModel == null) {
+        log('❌ UserModel is null');
+
+        Get.offAll(
+              () => const LoginScreen(),
+        );
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // 5. DEBUG USER DATA
+      // ---------------------------------------------------------
+      log('======================================');
+      log('USER DATA');
+      log('driverId: ${userModel.id}');
+      log('email: ${userModel.email}');
+      log('role: ${userModel.role}');
+      log('isDocumentVerify: ${userModel.isDocumentVerify}');
+      log('active: ${userModel.active}');
+      log('isActive: ${userModel.isActive}');
+      log('======================================');
+
+      // ---------------------------------------------------------
+      // 6. Load application settings
+      // ---------------------------------------------------------
+      try {
+        await FireStoreUtils.getSettings();
+      } catch (e) {
+        log('getSettings failed: $e');
+      }
+
+      try {
+        await FireStoreUtils.getForceUpdateConfig();
+      } catch (e) {
+        log('getForceUpdateConfig failed: $e');
+      }
+
+      // ---------------------------------------------------------
+      // 7. Check driver role
+      // ---------------------------------------------------------
+      if (userModel.role != Constant.userRoleDriver) {
+        log(
+          '❌ Invalid role: ${userModel.role}, '
+              'expected: ${Constant.userRoleDriver}',
+        );
+
+        Get.offAll(
+              () => const LoginScreen(),
+        );
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // 8. Check driver enabled/active
+      // ---------------------------------------------------------
+      if (!_isDriverEnabled(userModel)) {
+        log('❌ Driver is disabled/inactive');
+
+        Get.offAll(
+              () => const LoginScreen(),
+        );
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // 9. Mandatory update check
+      // ---------------------------------------------------------
+      if (await isMandatoryUpdateRequired()) {
+        log('⚠️ Mandatory update required');
+
+        Get.offAll(
+              () => const MandatoryUpdateScreen(),
+        );
+
+        return;
+      }
+
+      // ---------------------------------------------------------
+      // 10. Restore FCM token
+      // ---------------------------------------------------------
+      try {
+        final prefs = await SharedPreferences.getInstance();
+
+        final cachedToken = prefs.getString('fcmToken') ?? '';
+
+        if (cachedToken.trim().isNotEmpty) {
+          userModel.fcmToken = cachedToken;
+
+          log('FCM token restored from SharedPreferences');
         }
       } catch (e) {
-        log('Old server lookup failed: $e');
+        log('FCM token restore failed: $e');
       }
 
-      // Fallback: build UserModel from SharedPreferences (new server data)
-      if (userModel == null) {
-        userModel = await getUserFromSharedPreferences();
-        if (userModel == null) {
-          Get.offAll(const LoginScreen());
-          return;
-        }
-        log('✅ Loaded user from SharedPreferences');
-      }
-
-      await FireStoreUtils.getSettings();
-      await FireStoreUtils.getForceUpdateConfig();
-
-      if (userModel.role != Constant.userRoleDriver) {
-        Get.offAll(const LoginScreen());
-        return;
-      }
-
-      if (!_isDriverEnabled(userModel)) {
-        Get.offAll(const LoginScreen());
-        return;
-      }
-
-      if (await isMandatoryUpdateRequired()) {
-        Get.offAll(const MandatoryUpdateScreen());
-        return;
-      }
-
-      // Dedupe: `loginWithEmailAndPassword()` already generated the FCM token
-      // and performed the single authoritative `updateUser()`.
-      // Here we just reuse the cached token for this session.
-      final prefs = await SharedPreferences.getInstance();
-      final cachedToken = prefs.getString('fcmToken') ?? '';
-      if (cachedToken.trim().isNotEmpty) {
-        userModel.fcmToken = cachedToken;
-      }
-      // Keep global in-memory user available immediately after first login.
+      // ---------------------------------------------------------
+      // 11. Set global user
+      // ---------------------------------------------------------
       Constant.userModel = userModel;
-      Get.offAll(() => DashBoardScreen(userModel: userModel));
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(DriverLocationSync.syncDeviceLocationIntoUserModel());
-      });
+      // ---------------------------------------------------------
+      // 12. APPROVAL CHECK
+      // ---------------------------------------------------------
+      //
+      // API:
+      //
+      // "isApproved": true
+      //
+      // becomes:
+      //
+      // userModel.isDocumentVerify == true
+      //
+      // Therefore:
+      //
+      // true  -> Dashboard
+      // false -> Verification
+      // null  -> Verification
+      //
+      // ---------------------------------------------------------
 
-      // if (userModel.isDocumentVerify != true) {
-      //   Future.delayed(const Duration(milliseconds: 120),
-      //           () => Get.to(() => const VerificationScreen()));
-      // }
-    } catch (e) {
-      log('redirectScreen error: $e');
-      Get.offAll(const LoginScreen());
+      if (userModel.isDocumentVerify == true) {
+        // =======================================================
+        // APPROVED DRIVER
+        // =======================================================
+
+        log('======================================');
+        log('✅ DRIVER APPROVED');
+        log('isDocumentVerify = true');
+        log('Opening Dashboard');
+        log('======================================');
+
+        Get.offAll(
+              () => DashBoardScreen(
+            userModel: userModel!,
+          ),
+        );
+
+        // Sync location after dashboard is loaded.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(
+            DriverLocationSync.syncDeviceLocationIntoUserModel(),
+          );
+        });
+      } else {
+        // =======================================================
+        // NOT APPROVED DRIVER
+        // =======================================================
+
+        log('======================================');
+        log('⚠️ DRIVER NOT APPROVED');
+        log('isDocumentVerify = ${userModel.isDocumentVerify}');
+        log('Opening Verification Screen');
+        log('======================================');
+
+        Get.offAll(
+              () => const VerificationScreen(),
+        );
+      }
+    } catch (e, stackTrace) {
+      // ---------------------------------------------------------
+      // GLOBAL ERROR
+      // ---------------------------------------------------------
+      log(
+        'redirectScreen error: $e',
+        stackTrace: stackTrace,
+      );
+
+      Get.offAll(
+            () => const LoginScreen(),
+      );
     }
   }
-
   Future<void> loginWithEmailAndPassword() async {
     ShowToastDialog.showLoader('Please wait'.tr);
 
@@ -520,7 +685,7 @@ class LoginController extends GetxController {
         prefs.setString('zoneId', _readString(userData['zoneId'])),
         prefs.setBool('isActive', _readBool(userData['isActive'])),
         prefs.setString(
-            'isDocumentVerify', userData['isDocumentVerify']?.toString() ?? ''),
+            'isApproved', userData['isDocumentVerify']?.toString() ?? ''),
         prefs.setInt('active', _readInt(userData['active'])),
         prefs.setDouble('wallet_amount', _readDouble(userData['wallet_amount'])),
         prefs.setDouble('deliveryAmount', _readDouble(userData['deliveryAmount'])),

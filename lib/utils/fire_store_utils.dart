@@ -207,8 +207,8 @@ class FireStoreUtils {
         'user_id': userId,
         'amount': double.parse(amount),
       };
-      print("updateUserWalletHomeScreen ${bodys} ");
-      print("updateUserWalletHomeScreen ${amount} ");
+      debugPrint("updateUserWalletHomeScreen ${bodys} ");
+      debugPrint("updateUserWalletHomeScreen ${amount} ");
       final response = await http.post(
         Uri.parse('${Constant.baseUrl}driver-sql/delivery-amount/update'),
         headers: {
@@ -221,11 +221,11 @@ class FireStoreUtils {
         return responseData['success'] ?? true;
       } else {
         // Handle error response
-        print('API Error: ${response.statusCode}');
+        debugPrint('API Error: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('Error updating wallet: $e');
+      debugPrint('Error updating wallet: $e');
       return false;
     }
   }
@@ -249,11 +249,11 @@ class FireStoreUtils {
         return responseData['success'] ?? true;
       } else {
         // Handle error response
-        print('API Error: ${response.statusCode}');
+        debugPrint('API Error: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('Error updating wallet: $e');
+      debugPrint('Error updating wallet: $e');
       return false;
     }
   }
@@ -267,7 +267,7 @@ class FireStoreUtils {
             // double.parse(orderModel?.deliveryCharge.toString()??'0');
         // userModel.walletAmount =
         // -double.parse(orderModel?.toPay?.toString() ?? '0');
-        print("updateUserDeliveryAmount ${userModel.toJson()}");
+        debugPrint("updateUserDeliveryAmount ${userModel.toJson()}");
         // double.parse(userModel.deliveryAmount.toString()) +
             //     double.parse(amount);
         // IMPORTANT: Use updateUserWithoutWalletDelivery to avoid interfering with
@@ -281,12 +281,11 @@ class FireStoreUtils {
   }
   static Future<bool> updateUser(UserModel userModel) async {
     try {
+      final userId = await LoginController.getFirebaseId();
       log("updateUser ${userModel.toJson()}");
-      final response = await http.post(
-        Uri.parse('${Constant.baseUrl}driver-sql/users/update'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      final response = await http.put(
+        Uri.parse('${Constant.baseUrl}driver/updateDriverDetails?driverId=$userId'),
+        headers: await getHeaders(),
         body: json.encode(userModel.toJson()),
       );
       if (response.statusCode == 200) {
@@ -515,7 +514,7 @@ class FireStoreUtils {
   static Future<bool?> setDriverWalletRecord(
       Map<String, dynamic> driverWalletTransaction) async {
     try {
-      print("transactionModel id ${driverWalletTransaction['id']}");
+      debugPrint("transactionModel id ${driverWalletTransaction['id']}");
       final response = await http.post(
         Uri.parse('${Constant.baseUrl}driver/wallet/withdraw-method'),
         headers: {
@@ -524,15 +523,15 @@ class FireStoreUtils {
         body: json.encode(driverWalletTransaction),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print("Driver wallet record added successfully");
+        debugPrint("Driver wallet record added successfully");
         return true;
       } else {
         // Handle different error status codes
-        print("Failed to add driver wallet record: ${response.statusCode}");
+        debugPrint("Failed to add driver wallet record: ${response.statusCode}");
         return false;
       }
     } catch (error) {
-      print("Failed to update user: $error");
+      debugPrint("Failed to update user: $error");
       return false;
     }
   }
@@ -635,7 +634,7 @@ class FireStoreUtils {
       };
     } catch (e) {
       // Don't break the app if charges fetch fails; caller will use defaults.
-      print('❌ Error fetching driver charges (using defaults): $e');
+      debugPrint('❌ Error fetching driver charges (using defaults): $e');
       return {
         'pickup_rs_per_km': pickupDefault,
         'delivery_first_slab_km': deliveryFirstSlabKmDefault,
@@ -660,7 +659,7 @@ class FireStoreUtils {
         return defaultValue;
       }
 
-      print('getSettings ${Constant.baseUrl}driver-sql/settings');
+      debugPrint('getSettings ${Constant.baseUrl}driver-sql/settings');
       // Use HttpClientService with caching - settings rarely change (24 hours cache)
       final httpClient = HttpClientService();
       final response = await httpClient.get(
@@ -843,7 +842,7 @@ class FireStoreUtils {
           if (docVerification != null) {
             Constant.isDriverVerification =
                 _readBool(docVerification['isDriverVerification']);
-            print("Constant.isDriverVerification ${ docVerification['isDriverVerification']}  ${ Constant.isDriverVerification}");
+            debugPrint("Constant.isDriverVerification ${ docVerification['isDriverVerification']}  ${ Constant.isDriverVerification}");
           }
           // Process DriverNearBy
           final driverNearBy = data['DriverNearBy'];
@@ -901,7 +900,7 @@ class FireStoreUtils {
   static Future<List<ZoneModel>?> getZone() async {
     List<ZoneModel> zoneList = [];
     try {
-      print("getZone ") ;
+      debugPrint("getZone ") ;
       // Use HttpClientService with caching - zones rarely change (2 hours cache)
       final httpClient = HttpClientService();
       final response = await httpClient.get(
@@ -913,21 +912,21 @@ class FireStoreUtils {
         customTTL: const Duration(hours: 2), // Zones change rarely, cache for 2 hours
         useCache: true,
       );
-      print("getZone ${response.body}") ;
+      debugPrint("getZone ${response.body}") ;
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
 
         // Check if response is successful
         if (responseData['success'] != true) {
-          print("API returned unsuccessful response");
+          debugPrint("API returned unsuccessful response");
           return [];
         }
 
         // Get the data array
         List<dynamic> zonesData = responseData['data'] ?? [];
 
-        print("Found ${zonesData.length} zones in API response");
+        debugPrint("Found ${zonesData.length} zones in API response");
 
         for (var element in zonesData) {
           try {
@@ -938,14 +937,14 @@ class FireStoreUtils {
             if (isPublished) {
               ZoneModel zoneModel = ZoneModel.fromJson(element);
               zoneList.add(zoneModel);
-              print("Added zone: ${zoneModel.name}");
+              debugPrint("Added zone: ${zoneModel.name}");
             }
           } catch (e) {
-            print("Error parsing zone: $e");
+            debugPrint("Error parsing zone: $e");
           }
         }
       } else {
-        print("Failed to load zones: ${response.statusCode}");
+        debugPrint("Failed to load zones: ${response.statusCode}");
         return [];
       }
     } catch (e, s) {
@@ -953,7 +952,7 @@ class FireStoreUtils {
       return [];
     }
 
-    print("Returning ${zoneList.length} zones");
+    debugPrint("Returning ${zoneList.length} zones");
     return zoneList;
   }
   // static Future<WalletTransactionsApiResponse?> getWalletTransaction({
@@ -1322,13 +1321,13 @@ class FireStoreUtils {
           }
           return paymentData;
         }
-        print('Failed to load payment settings: ${responseData['message']}');
+        debugPrint('Failed to load payment settings: ${responseData['message']}');
         return null;
       }
-      print('HTTP error ${response.statusCode}: ${response.body}');
+      debugPrint('HTTP error ${response.statusCode}: ${response.body}');
       return null;
     } catch (e) {
-      print('Error fetching payment settings: $e');
+      debugPrint('Error fetching payment settings: $e');
       return null;
     }
   }
@@ -1629,15 +1628,15 @@ class FireStoreUtils {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
         final dynamic templateData = responseData['data'] ?? responseData;
-        print("------>");
-        print(templateData);
+        debugPrint("------>");
+        debugPrint(templateData);
         if (templateData != null) {
           emailTemplateModel = EmailTemplateModel.fromJson(templateData);
         }
       } else if (response.statusCode == 404) {
         // Email template not found
-        print("------>");
-        print("Email template not found for type: $type");
+        debugPrint("------>");
+        debugPrint("Email template not found for type: $type");
         emailTemplateModel = null;
       } else {
         throw Exception('Failed to load email template: ${response.statusCode}');
@@ -1715,17 +1714,17 @@ class FireStoreUtils {
           double.parse(orderModel.tipAmount!));
     } else {
       //driverAmount += -(basePrice + taxAmount);
-      print('[Wallet Deduction][COD] Order: ${orderModel.id}, ToPay: ${orderModel.toPay}, Deducting from wallet: -${orderModel.toPay}');
+      debugPrint('[Wallet Deduction][COD] Order: ${orderModel.id}, ToPay: ${orderModel.toPay}, Deducting from wallet: -${orderModel.toPay}');
       driverAmount += -double.parse(orderModel.toPay.toString());
     }
-    // Debug print: show deduction info
+    // Debug debugPrint: show deduction info
     final userId = orderModel.driverID??'';
     final userProfile = await getUserProfile(userId);
     final oldWallet = userProfile?.walletAmount ?? 0.0;
     final newWallet = oldWallet + double.parse(driverAmount.toString());
 
-    print("orderModel.deliveryChargeorderModel.deliveryCharge ${orderModel.deliveryCharge.toString()}");
-    print('[Wallet Deduction] Order: ${orderModel.id}, Driver: $userId, Old Wallet: $oldWallet, Change: ${driverAmount.toString()}, New Wallet: $newWallet');
+    debugPrint("orderModel.deliveryChargeorderModel.deliveryCharge ${orderModel.deliveryCharge.toString()}");
+    debugPrint('[Wallet Deduction] Order: ${orderModel.id}, Driver: $userId, Old Wallet: $oldWallet, Change: ${driverAmount.toString()}, New Wallet: $newWallet');
     log('[updateWallateAmount] Calling updateUserWallet with amount: ${driverAmount.toString()}');
     await FireStoreUtils.updateUserWallet(
         userId: userId, amount: driverAmount.toString());
@@ -1831,7 +1830,7 @@ class FireStoreUtils {
     NotificationModel? notificationModel;
     try {
       String url = '${Constant.baseUrl}firestore/notifications/$type';
-        print("getNotificationContent ${url}");
+        debugPrint("getNotificationContent ${url}");
         final response = await http.get(
           Uri.parse(url),
           headers: {
@@ -1842,13 +1841,13 @@ class FireStoreUtils {
           final Map<String, dynamic> responseData = json.decode(response.body);
           // Assuming the API returns the notification data directly or wrapped in a 'data' field
           final dynamic notificationData = responseData['data'] ?? responseData;
-          print("------>");
-          print(notificationData);
+          debugPrint("------>");
+          debugPrint(notificationData);
           notificationModel = NotificationModel.fromJson(notificationData);
         } else if (response.statusCode == 404) {
           // Notification not found - return default notification
-          print("------>");
-          print("Notification not found, using default");
+          debugPrint("------>");
+          debugPrint("Notification not found, using default");
           notificationModel = NotificationModel(
             id: "",
             message: "Notification setup is pending",
@@ -1883,15 +1882,15 @@ class FireStoreUtils {
           if (jsonResponse['success'] == true) {
             return true;
           } else {
-            print('API returned error: ${jsonResponse['message']}');
+            debugPrint('API returned error: ${jsonResponse['message']}');
             return false;
           }
         } else {
-          print('API Error: ${response.statusCode}');
+          debugPrint('API Error: ${response.statusCode}');
           return false;
         }
       } catch (e, s) {
-        print('deleteUser error: $e $s');
+        debugPrint('deleteUser error: $e $s');
         return false;
       }
     }
@@ -1928,7 +1927,7 @@ class FireStoreUtils {
       String? userId = await LoginController.getFirebaseId();
 
       DriverDocumentModel? driverDocumentModel;
-      print("getDocumentOfDriver ${Constant.baseUrl}driver/documents/$userId ");
+      debugPrint("getDocumentOfDriver ${Constant.baseUrl}driver/documents/$userId ");
       try {
         final response = await http.get(
           Uri.parse('${Constant.baseUrl}driver/documents/$userId'),
@@ -1936,7 +1935,7 @@ class FireStoreUtils {
             'Content-Type': 'application/json',
           },
         );
-        print("getDocumentOfDriver ${response.body} ");
+        debugPrint("getDocumentOfDriver ${response.body} ");
 
         if (response.statusCode == 200) {
           final Map<String, dynamic> responseData = json.decode(response.body);
@@ -1956,7 +1955,7 @@ class FireStoreUtils {
           throw Exception('Failed to load document: ${response.statusCode}');
         }
       } catch (e) {
-        print('Error fetching driver document: $e');
+        debugPrint('Error fetching driver document: $e');
         throw Exception('Failed to load driver document');
       }
 
@@ -2133,7 +2132,7 @@ class FireStoreUtils {
         }
       } catch (e) {
         // Handle network errors or parsing errors
-        print('Error fetching withdraw method: $e');
+        debugPrint('Error fetching withdraw method: $e');
         return null;
       }
     }
@@ -2171,7 +2170,7 @@ class FireStoreUtils {
           throw Exception('Failed to set withdraw method: ${response.statusCode}');
         }
       } catch (e) {
-        print('Error setting withdraw method: $e');
+        debugPrint('Error setting withdraw method: $e');
         return null;
       }
     }
@@ -2190,15 +2189,15 @@ class FireStoreUtils {
             }
             return walletTransactionList;
           } else {
-            print('API returned error: ${jsonResponse['message']}');
+            debugPrint('API returned error: ${jsonResponse['message']}');
             return [];
           }
         } else {
-          print('API Error: ${response.statusCode}');
+          debugPrint('API Error: ${response.statusCode}');
           return [];
         }
       } catch (e) {
-        print('Error fetching withdrawal history: $e');
+        debugPrint('Error fetching withdrawal history: $e');
         return [];
       }
     }
@@ -2291,12 +2290,12 @@ class FireStoreUtils {
             return;
           }
         } else {
-          print('API Error: ${response.statusCode}');
+          debugPrint('API Error: ${response.statusCode}');
           return;
         }
       } catch (e) {
         // Handle network/parsing errors
-        print('Error fetching referral data: $e');
+        debugPrint('Error fetching referral data: $e');
         return;
       }
 
@@ -2348,14 +2347,14 @@ class FireStoreUtils {
           return jsonResponse['success'] == true;
         } else if (response.statusCode == 429) {
           // Rate limit - return null to indicate retry needed
-          print('API Rate Limited (429): Too many requests');
+          debugPrint('API Rate Limited (429): Too many requests');
           return null;
         } else {
-          print('API Error: ${response.statusCode}');
+          debugPrint('API Error: ${response.statusCode}');
           return false;
         }
       } catch (e) {
-        print('Error assigning order to driver: $e');
+        debugPrint('Error assigning order to driver: $e');
         return false;
       }
     }
@@ -2376,15 +2375,15 @@ class FireStoreUtils {
         if (response.statusCode == 200) {
           final jsonResponse = json.decode(response.body);
           if (jsonResponse['success'] != true) {
-            print('Failed to remove order from other drivers');
+            debugPrint('Failed to remove order from other drivers');
           }
         } else {
           // Handle API error
-          print('API Error: ${response.statusCode}');
+          debugPrint('API Error: ${response.statusCode}');
         }
       } catch (e) {
         // Handle network/parsing errors
-        print('Error removing order from other drivers: $e');
+        debugPrint('Error removing order from other drivers: $e');
       }
     }
   }

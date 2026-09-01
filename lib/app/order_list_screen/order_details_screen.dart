@@ -27,7 +27,7 @@ Future<double?> fetchToPayForOrder(String orderId) async {
       // Check if response body is valid JSON (not HTML)
       final responseBody = response.body.trim();
       if (responseBody.startsWith('<!') || responseBody.startsWith('<html')) {
-        print("Error fetching toPay: API returned HTML instead of JSON. Status: ${response.statusCode}");
+        debugPrint("Error fetching toPay: API returned HTML instead of JSON. Status: ${response.statusCode}");
         return null;
       }
 
@@ -37,18 +37,18 @@ Future<double?> fetchToPayForOrder(String orderId) async {
         return (jsonResponse['data']['to_pay'] as num).toDouble();
       }
       } catch (jsonError) {
-        print("Error parsing toPay JSON: $jsonError");
-        print("Response body: ${responseBody.substring(0, responseBody.length > 200 ? 200 : responseBody.length)}");
+        debugPrint("Error parsing toPay JSON: $jsonError");
+        debugPrint("Response body: ${responseBody.substring(0, responseBody.length > 200 ? 200 : responseBody.length)}");
         return null;
       }
     } else {
-      print("Error fetching toPay: API returned status ${response.statusCode}");
-      print("Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}");
+      debugPrint("Error fetching toPay: API returned status ${response.statusCode}");
+      debugPrint("Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}");
     }
 
     return null;
   } catch (e) {
-    print("Error fetching toPay: $e");
+    debugPrint("Error fetching toPay: $e");
     return null;
   }
 }

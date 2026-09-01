@@ -29,7 +29,7 @@ import 'package:get/get.dart';
 
 class Constant {
   // static String baseUrl  = "http://192.168.88.25:8000/api/";
-  static String baseUrl  = "http://192.168.0.17:8084/api/";
+  static String baseUrl  = "http://192.168.0.14:8084/api/";
   static String userRoleDriver = 'driver';
   static String userRoleCustomer = 'customer';
   static String userRoleVendor = 'vendor';
@@ -465,12 +465,12 @@ class Constant {
 
     try {
       final sendReport = await send(message, smtpServer);
-      print('Message sent: $sendReport');
+      debugPrint('Message sent: $sendReport');
     } on MailerException catch (e) {
       print(e);
-      print('Message not sent.');
+      debugPrint('Message not sent.');
       for (var p in e.problems) {
-        print('Problem: ${p.code}: ${p.msg}');
+        debugPrint('Problem: ${p.code}: ${p.msg}');
       }
     }
 

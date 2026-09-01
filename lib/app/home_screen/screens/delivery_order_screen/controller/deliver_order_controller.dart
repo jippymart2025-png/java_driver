@@ -107,15 +107,15 @@ class DeliverOrderController extends GetxController {
         if (res['success'] == true && res['data'] != null) {
           return res['data'];
         } else {
-          print("No bonus found for zone id: $zoneId");
+          debugPrint("No bonus found for zone id: $zoneId");
           return null;
         }
       } else {
-        print("API Error: ${response.statusCode}");
+        debugPrint("API Error: ${response.statusCode}");
         return null;
       }
     } catch (e) {
-      print("Error fetching zone bonus: $e");
+      debugPrint("Error fetching zone bonus: $e");
       return null;
     }
   }
@@ -124,7 +124,7 @@ class DeliverOrderController extends GetxController {
 
   void deliveryAmountBonusAmount() async {
     try {
-      print("totalCalculatedCharge and zone id ${Constant.userModel?.zoneId.toString()} ");
+      debugPrint("totalCalculatedCharge and zone id ${Constant.userModel?.zoneId.toString()} ");
       int orderCount = await getTodayCompletedOrdersCount();
       Map<String, dynamic>? docData =
           await getZoneBonusByZoneId(Constant.userModel?.zoneId ?? '');
@@ -133,9 +133,9 @@ class DeliverOrderController extends GetxController {
       double totalCalculatedCharge = double.tryParse(
           orderModelNew?.calculatedCharges?['totalCalculatedCharge']?.toString() ?? '0'
       ) ?? 0.0;
-      print("totalCalculatedCharge order Count  $orderCount");
-      print("totalCalculatedCharge and zone id ${Constant.userModel?.zoneId.toString()} $totalCalculatedCharge");
-      print("totalCalculatedCharge currentOrder Value id ${orderModel.value.id} ${orderModelNew?.calculatedCharges?['totalCalculatedCharge']}");
+      debugPrint("totalCalculatedCharge order Count  $orderCount");
+      debugPrint("totalCalculatedCharge and zone id ${Constant.userModel?.zoneId.toString()} $totalCalculatedCharge");
+      debugPrint("totalCalculatedCharge currentOrder Value id ${orderModel.value.id} ${orderModelNew?.calculatedCharges?['totalCalculatedCharge']}");
       if (docData != null) {
         int requiredOrdersForBonus = int.tryParse(docData['requiredOrdersForBonus'].toString()) ?? 0;
         int bonusAmount = int.tryParse(docData['bonusAmount'].toString()) ?? 0;
@@ -153,23 +153,23 @@ class DeliverOrderController extends GetxController {
               ],
             ),
           );
-          print("Bonus given: $bonusAmount");
-          print("bonusAmount ${bonusAmount}");
-          print("bonusAmount ${requiredOrdersForBonus}");
+          debugPrint("Bonus given: $bonusAmount");
+          debugPrint("bonusAmount ${bonusAmount}");
+          debugPrint("bonusAmount ${requiredOrdersForBonus}");
         } else {
-          print("totalCalculatedCharge  1 $totalCalculatedCharge");
+          debugPrint("totalCalculatedCharge  1 $totalCalculatedCharge");
         }
       } else {
-        print("totalCalculatedCharge  2 $totalCalculatedCharge");
+        debugPrint("totalCalculatedCharge  2 $totalCalculatedCharge");
       }
     } catch (e) {
-      print("totalCalculatedCharge deliveryAmountBonusAmount ${e.toString()} ");
+      debugPrint("totalCalculatedCharge deliveryAmountBonusAmount ${e.toString()} ");
     }
   }
 
   Future<double?> fetchToPay(String orderId) async {
     final url = Uri.parse('${Constant.baseUrl}mobile/orders/$orderId/billing/to-pay');
-    print("[ToPay] Fetching ToPay for order: $orderId");
+    debugPrint("[ToPay] Fetching ToPay for order: $orderId");
 
     try {
       final response = await http.get(url).timeout(Duration(seconds: 10));
@@ -179,7 +179,7 @@ class DeliverOrderController extends GetxController {
         // Check if response body is valid JSON (not HTML)
         final responseBody = response.body.trim();
         if (responseBody.startsWith('<!') || responseBody.startsWith('<html')) {
-          print("[ToPay] ❌ API returned HTML instead of JSON. Status: ${response.statusCode}");
+          debugPrint("[ToPay] ❌ API returned HTML instead of JSON. Status: ${response.statusCode}");
           return null;
         }
 
@@ -188,29 +188,29 @@ class DeliverOrderController extends GetxController {
           if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
             if (jsonResponse['data']['found'] == true) {
               final toPay = (jsonResponse['data']['to_pay'] as num).toDouble();
-              print("[ToPay] ✅ Successfully fetched ToPay: $toPay");
+              debugPrint("[ToPay] ✅ Successfully fetched ToPay: $toPay");
               return toPay;
             } else {
-              print("[ToPay] ⚠️ Order billing not found (found: false)");
+              debugPrint("[ToPay] ⚠️ Order billing not found (found: false)");
               return null;
             }
           } else {
-            print("[ToPay] ⚠️ API returned success: false");
+            debugPrint("[ToPay] ⚠️ API returned success: false");
             return null;
           }
         } catch (jsonError) {
-          print("[ToPay] ❌ Error parsing ToPay JSON: $jsonError");
-          print("[ToPay] Response body: ${responseBody.substring(0, responseBody.length > 200 ? 200 : responseBody.length)}");
+          debugPrint("[ToPay] ❌ Error parsing ToPay JSON: $jsonError");
+          debugPrint("[ToPay] Response body: ${responseBody.substring(0, responseBody.length > 200 ? 200 : responseBody.length)}");
           return null;
         }
       } else {
-        print("[ToPay] ❌ API returned status ${response.statusCode}");
-        print("[ToPay] Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}");
+        debugPrint("[ToPay] ❌ API returned status ${response.statusCode}");
+        debugPrint("[ToPay] Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}");
       }
 
       return null;
     } catch (e) {
-      print("[ToPay] ❌ Error fetching ToPay: $e");
+      debugPrint("[ToPay] ❌ Error fetching ToPay: $e");
       return null;
     }
   }
@@ -344,7 +344,7 @@ void _showWalletUpdatedPopup() {
   Future<void> completedOrder() async {
     // Prevent duplicate calls
     if (isCompletingOrder.value) {
-      print("[DeliverOrderController] Order completion already in progress, ignoring duplicate call");
+      debugPrint("[DeliverOrderController] Order completion already in progress, ignoring duplicate call");
       return;
     }
     isCompletingOrder.value = true;
@@ -358,7 +358,7 @@ void _showWalletUpdatedPopup() {
       if (chargeValue == null) {
         // If calculatedCharges doesn't exist, try to use HomeController's totalCalculatedCharge
         parsedCharge = homeController.totalCalculatedCharge.value;
-        print("[DeliverOrderController] calculatedCharges not found, using HomeController totalCalculatedCharge: $parsedCharge");
+        debugPrint("[DeliverOrderController] calculatedCharges not found, using HomeController totalCalculatedCharge: $parsedCharge");
       } else if (chargeValue is num) {
         parsedCharge = chargeValue;
       } else {
@@ -373,36 +373,36 @@ void _showWalletUpdatedPopup() {
       // Keep tip safe for downstream numeric parsing.
       orderModel.value.tipAmount = orderModel.value.tipAmount ?? '0';
 
-      print("[DeliverOrderController] Set orderModel.deliveryCharge: ${orderModel.value.deliveryCharge}  ${orderModel.value.toPay} ");
-      print("[DeliverOrderController] Playing sound");
+      debugPrint("[DeliverOrderController] Set orderModel.deliveryCharge: ${orderModel.value.deliveryCharge}  ${orderModel.value.toPay} ");
+      debugPrint("[DeliverOrderController] Playing sound");
       await AudioPlayerService.playSound(false);
-      print("[DeliverOrderController] Setting status to completed");
+      debugPrint("[DeliverOrderController] Setting status to completed");
       orderModel.value.status = Constant.orderCompleted;
       // Ensure driverID is set
       if (orderModel.value.driverID == null) {
         orderModel.value.driverID = Constant.userModel?.id;
-        print("[DeliverOrderController] driverID was null, set to: ${orderModel.value.driverID}");
+        debugPrint("[DeliverOrderController] driverID was null, set to: ${orderModel.value.driverID}");
       }
-      print("driverID:   ${orderModel.value.driverID}");
-      print("paymentMethod: ${orderModel.value.paymentMethod}");
-      print("deliveryCharge: ${orderModel.value.deliveryCharge}");
-      print("tipAmount: ${orderModel.value.tipAmount}");
+      debugPrint("driverID:   ${orderModel.value.driverID}");
+      debugPrint("paymentMethod: ${orderModel.value.paymentMethod}");
+      debugPrint("deliveryCharge: ${orderModel.value.deliveryCharge}");
+      debugPrint("tipAmount: ${orderModel.value.tipAmount}");
       if (orderModel.value.driverID == null ||
           orderModel.value.paymentMethod == null) {
         ShowToastDialog.closeLoader();
         ShowToastDialog.showToast("Order data is incomplete. Cannot complete order.");
         return;
       }
-      print("[DeliverOrderController] Updating wallet amount");
+      debugPrint("[DeliverOrderController] Updating wallet amount");
       final amountToCollect = getOrderAmountToCollect();
       if (amountToCollect <= 0.0) {
-        print('[DeliverOrderController][ERROR] Computed amount to collect is invalid: $amountToCollect');
+        debugPrint('[DeliverOrderController][ERROR] Computed amount to collect is invalid: $amountToCollect');
         ShowToastDialog.closeLoader();
         ShowToastDialog.showToast("Order billing info missing. Cannot complete order.");
         return;
       }
       orderModel.value.toPay = amountToCollect.toStringAsFixed(2);
-      print('[DeliverOrderController] Set ToPay: ${orderModel.value.toPay}');
+      debugPrint('[DeliverOrderController] Set ToPay: ${orderModel.value.toPay}');
       // Update wallet and delivery amount via separate APIs first
       // final ok = await OrderWorkflowService.completeDeliveryOrderBackend(
       //   order: orderModel.value,
@@ -418,14 +418,14 @@ void _showWalletUpdatedPopup() {
       // Bonus popup depends on updated completion stats.
       deliveryAmountBonusAmount();
       ShowToastDialog.closeLoader();
-      print("[DeliverOrderController] Order completed, closing loader and going back");
+      debugPrint("[DeliverOrderController] Order completed, closing loader and going back");
       // Mark as completed immediately so API refresh can't re-add it before .then runs
       try {
         Get.find<HomeController>().markOrderAsCompleted(orderModel.value.id);
       } catch (_) {}
       _showWalletUpdatedPopup();
     } catch (e) {
-      print("[DeliverOrderController] Error in completedOrder: $e");
+      debugPrint("[DeliverOrderController] Error in completedOrder: $e");
       ShowToastDialog.closeLoader();
       ShowToastDialog.showToast("Failed to complete order");
     } finally {

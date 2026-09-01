@@ -53,52 +53,101 @@ class EditProfileScreen extends StatelessWidget {
                     Center(
                       child: Stack(
                         children: [
-                          controller.profileImage.isEmpty
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(60),
-                                  child: Image.asset(
-                                    Constant.userPlaceHolder,
-                                    height: Responsive.width(24, context),
-                                    width: Responsive.width(24, context),
-                                    fit: BoxFit.cover,
+                          // ========================================================
+                          // PROFILE IMAGE
+                          // ========================================================
+
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(60),
+                            child: controller.profileImage.value.isEmpty
+                                ? Image.asset(
+                              Constant.userPlaceHolder,
+                              height: Responsive.width(24, context),
+                              width: Responsive.width(24, context),
+                              fit: BoxFit.cover,
+                            )
+                                : Constant().hasValidUrl(
+                              controller.profileImage.value,
+                            )
+                                ? NetworkImageWidget(
+                              fit: BoxFit.cover,
+                              imageUrl:
+                              controller.profileImage.value,
+                              height:
+                              Responsive.width(24, context),
+                              width:
+                              Responsive.width(24, context),
+                            )
+                                : Image.file(
+                              File(
+                                controller.profileImage.value,
+                              ),
+                              height:
+                              Responsive.width(24, context),
+                              width:
+                              Responsive.width(24, context),
+                              fit: BoxFit.cover,
+                              errorBuilder:
+                                  (context, error, stackTrace) {
+                                return Image.asset(
+                                  Constant.userPlaceHolder,
+                                  height:
+                                  Responsive.width(
+                                    24,
+                                    context,
                                   ),
-                                )
-                              : Constant().hasValidUrl(
-                                          controller.profileImage.value) ==
-                                      false
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(60),
-                                      child: Image.file(
-                                        File(controller.profileImage.value),
-                                        height: Responsive.width(24, context),
-                                        width: Responsive.width(24, context),
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : ClipRRect(
-                                      borderRadius: BorderRadius.circular(60),
-                                      child: NetworkImageWidget(
-                                        fit: BoxFit.cover,
-                                        imageUrl: controller
-                                            .userModel.value.profilePictureURL
-                                            .toString(),
-                                        height: Responsive.width(24, context),
-                                        width: Responsive.width(24, context),
-                                      ),
-                                    ),
+                                  width:
+                                  Responsive.width(
+                                    24,
+                                    context,
+                                  ),
+                                  fit: BoxFit.cover,
+                                );
+                              },
+                            ),
+                          ),
+
+                          // ========================================================
+                          // EDIT BUTTON
+                          // ========================================================
+
                           Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: InkWell(
-                                  onTap: () {
-                                    buildBottomSheet(context, controller);
-                                  },
-                                  child: SvgPicture.asset(
-                                      "assets/icons/ic_edit.svg")))
+                            bottom: 0,
+                            right: 0,
+                            child: InkWell(
+                              onTap: () {
+                                buildBottomSheet(
+                                  context,
+                                  controller,
+                                );
+                              },
+                              child: SvgPicture.asset(
+                                "assets/icons/ic_edit.svg",
+                              ),
+                            ),
+                          ),
+
+                          // ========================================================
+                          // UPLOAD LOADING
+                          // ========================================================
+
+                          if (controller.isUploadingProfileImage.value)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: Colors.black45,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                    ),
-                    const SizedBox(
+                    ),                    const SizedBox(
                       height: 40,
                     ),
                     Row(

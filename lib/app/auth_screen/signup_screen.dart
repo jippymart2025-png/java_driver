@@ -484,16 +484,16 @@ class _SignupScreenState extends State<SignupScreen>
                                   ?.toDouble() ??
                                   0.0;
 
-                          print(
+                          debugPrint(
                             'ADDRESS: '
                                 '${controller.buildingNumberEditingController.value.text}',
                           );
 
-                          print(
+                          debugPrint(
                             'LATITUDE: ${controller.latitude.value}',
                           );
 
-                          print(
+                          debugPrint(
                             'LONGITUDE: ${controller.longitude.value}',
                           );
                         }

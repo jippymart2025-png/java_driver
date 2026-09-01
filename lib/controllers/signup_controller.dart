@@ -385,8 +385,8 @@ final selectedState = Rxn<StateModel>();
         headers: await getHeaders(),
       );
 
-      print('Status Code: ${response.statusCode}');
-      print('States Response: ${response.body}');
+      debugPrint('Status Code: ${response.statusCode}');
+      debugPrint('States Response: ${response.body}');
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
 
@@ -409,8 +409,8 @@ final selectedState = Rxn<StateModel>();
         headers:  await getHeaders()
       );
 
-      print('City Status Code: ${response.statusCode}');
-      print('City Response: ${response.body}');
+      debugPrint('City Status Code: ${response.statusCode}');
+      debugPrint('City Response: ${response.body}');
 
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
@@ -420,10 +420,10 @@ final selectedState = Rxn<StateModel>();
 
         selectedCity.value = null; // ADD THIS LINE
 
-        print('Loaded ${cityList.length} cities');
+        debugPrint('Loaded ${cityList.length} cities');
       }
     } catch (e) {
-      print('City Error: $e');
+      debugPrint('City Error: $e');
     }
   }
 
@@ -437,8 +437,8 @@ final selectedState = Rxn<StateModel>();
         headers: await getHeaders()
       );
 
-      print('Area Status Code: ${response.statusCode}');
-      print('Area Response: ${response.body}');
+      debugPrint('Area Status Code: ${response.statusCode}');
+      debugPrint('Area Response: ${response.body}');
 
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
@@ -447,10 +447,10 @@ final selectedState = Rxn<StateModel>();
             data.map((e) => AreaModel.fromJson(e)).toList();
         selectedArea.value = null;
 
-        print('Loaded ${areaList.length} areas');
+        debugPrint('Loaded ${areaList.length} areas');
       }
     } catch (e) {
-      print('Area Error: $e');
+      debugPrint('Area Error: $e');
     }
   }
 

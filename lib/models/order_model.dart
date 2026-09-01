@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:jippydriver_driver/models/cart_product_model.dart';
 import 'package:jippydriver_driver/models/tax_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
@@ -105,7 +106,7 @@ class OrderModel {
                 Map<String, dynamic>.from(addressJson));
           }
         } catch (e) {
-          print('Error decoding address JSON string: $e');
+          debugPrint('Error decoding address JSON string: $e');
           address = null;
         }
       } else {
@@ -155,7 +156,7 @@ class OrderModel {
     //         vendorID = vendor!.id;
     //       }
     //     } catch (e) {
-    //       print('Error parsing vendor Map: $e');
+    //       debugPrint('Error parsing vendor Map: $e');
     //       vendor = null;
     //     }
     //   } else if (json['vendor'] is String) {
@@ -176,7 +177,7 @@ class OrderModel {
     //       }
     //     } catch (e) {
     //       // If JSON decode fails, treat the string as vendorID
-    //       print('Error decoding vendor JSON string: $e - treating as vendorID');
+    //       debugPrint('Error decoding vendor JSON string: $e - treating as vendorID');
     //       vendorID = json['vendor']?.toString();
     //       vendor = null;
     //     }
@@ -201,7 +202,7 @@ class OrderModel {
             vendorID = vendor!.id;
           }
         } catch (e) {
-          print('Error parsing vendor Map: $e');
+          debugPrint('Error parsing vendor Map: $e');
           vendor = null;
         }
       }
@@ -228,7 +229,7 @@ class OrderModel {
             specialDiscount = Map<String, dynamic>.from(specialDiscountJson);
           }
         } catch (e) {
-          print('Error decoding specialDiscount JSON string: $e');
+          debugPrint('Error decoding specialDiscount JSON string: $e');
           specialDiscount = null;
         }
       }
@@ -276,7 +277,7 @@ class OrderModel {
             author = UserModel.fromJson(Map<String, dynamic>.from(authorJson));
           }
         } catch (e) {
-          print('Error decoding author JSON string: $e');
+          debugPrint('Error decoding author JSON string: $e');
           author = null;
         }
       }
@@ -292,7 +293,7 @@ class OrderModel {
             driver = UserModel.fromJson(Map<String, dynamic>.from(driverJson));
           }
         } catch (e) {
-          print('Error decoding driver JSON string: $e');
+          debugPrint('Error decoding driver JSON string: $e');
           driver = null;
         }
       }
@@ -311,15 +312,15 @@ class OrderModel {
             calculatedCharges = Map<String, dynamic>.from(calculatedChargesJson);
           }
         } catch (e) {
-          print('Error decoding calculatedCharges JSON string: $e');
+          debugPrint('Error decoding calculatedCharges JSON string: $e');
           calculatedCharges = null;
         }
       }
     }
     } catch (e, stackTrace) {
-      print('Error parsing OrderModel from JSON: $e');
-      print('Stack trace: $stackTrace');
-      print('JSON keys: ${json.keys.toList()}');
+      debugPrint('Error parsing OrderModel from JSON: $e');
+      debugPrint('Stack trace: $stackTrace');
+      debugPrint('JSON keys: ${json.keys.toList()}');
       // Re-throw to let caller handle it
       rethrow;
     }

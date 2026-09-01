@@ -88,10 +88,10 @@ class ProfileController extends GetxController {
       return;
     }
 
-    // if (index == 1) {
-    //   Get.to(() => const VerificationScreen());
-    //   return;
-    // }
+    if (index == 1) {
+      Get.to(() => const VerificationScreen());
+      return;
+    }
 
     if (index == 2) {
       Get.to(() => const TermsAndConditionScreen(type: "terms"));

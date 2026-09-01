@@ -189,7 +189,7 @@ class UserModel {
         json['password']?.toString();
     firstName = json['firstName'];
     lastName = json['lastName'];
-    profilePictureURL = json['profilePictureURL'] ?? json['profile_pic'];
+    profilePictureURL = json['profilePictureURL'] ?? json['profilePicUrl'];
     fcmToken = json['fcmToken'];
     countryCode = json['countryCode'];
     if (json['phoneNumber'] != null) {
@@ -237,16 +237,16 @@ class UserModel {
 
 
 
-    active = _parseNullableBool(json['active']) ?? true;
-    isActive = _parseNullableBool(json['isActive']) ?? true;
+    active = _parseNullableBool(json['isActive']) ?? true;
+    isActive = _parseNullableBool(json['readyToAcceptOrders']) ?? true;
     // Backend may send one of the two keys; mirror to avoid accidental false writes.
     if (active == null && isActive != null) active = isActive;
     if (isActive == null && active != null) isActive = active;
     isDocumentVerify =
-        json['isDocumentVerify'] == "1" ||
-        json['isDocumentVerify'] == true ||
-        json['isDocumentVerify'] == 1;
-    print("isDocumentVerify  $isDocumentVerify");
+        json['isApproved'] == "1" ||
+        json['isApproved'] == true ||
+        json['isApproved'] == 1;
+    print("isApproved  $isDocumentVerify");
     role = json['role'] ?? 'driver';
 
     // Fix for location handling - check if it's a string that needs parsing
@@ -504,7 +504,7 @@ class UserModel {
     data['active'] = active;
     data['isActive'] = isActive;
     data['role'] = role;
-    data['isDocumentVerify'] =
+    data['isApproved'] =
         isDocumentVerify;
 
     data['zoneId'] = zoneId;

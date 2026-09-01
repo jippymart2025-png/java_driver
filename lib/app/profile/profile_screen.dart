@@ -436,11 +436,11 @@ class _AboutAppCard extends StatelessWidget {
             iconColor: AppThemeData.warning300,
             onTap: () => ctrl.navigate(1),
           ),
-        _MenuItemData(
-          iconAsset: 'assets/icons/ic_focus.svg',
-          title: 'WithdrawMethod Setup'.tr,
-          onTap: () => ctrl.navigate(4),
-        ),
+        // _MenuItemData(
+        //   iconAsset: 'assets/icons/ic_focus.svg',
+        //   title: 'WithdrawMethod Setup'.tr,
+        //   onTap: () => ctrl.navigate(4),
+        // ),
       ],
     );
   }

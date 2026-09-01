@@ -16,6 +16,7 @@ import 'package:jippydriver_driver/models/withdrawal_model.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/services/wallet_api_service.dart';
 import 'package:jippydriver_driver/models/driver_incentive_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WalletController extends GetxController {
   // ─── Loading & Pagination State ────────────────────────────────────────────
@@ -134,9 +135,9 @@ class WalletController extends GetxController {
       //   perPage: _perPage,
       // final driverId = await LoginController.getFirebaseId();
       //final driverId = "1";
-      final driverId = "5";
 
-      log("DRIVER ID = $driverId");
+      final driverId = await LoginController.getFirebaseId();
+
       final response = await ApiService.getWalletTransactions(
         page: _currentPage,
         perPage: _perPage,

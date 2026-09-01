@@ -2825,8 +2825,8 @@ class HomeController extends GetxController {
       '${Constant.baseUrl}driver/fetchEarnings?driverId=$driverId&date=$date',
     );
 
-      print("FINAL DRIVER ID = $driverId");
-      print("URL = $url");
+      debugPrint("FINAL DRIVER ID = $driverId");
+      debugPrint("URL = $url");
 
       final httpClient = HttpClientService();
 
@@ -2841,8 +2841,8 @@ class HomeController extends GetxController {
         enableRetry: true,
       );
 
-      print("STATUS CODE : ${response.statusCode}");
-      print("RESPONSE BODY : ${response.body}");
+      debugPrint("STATUS CODE : ${response.statusCode}");
+      debugPrint("RESPONSE BODY : ${response.body}");
 
       if (response.statusCode == 200) {
         if (response.body.startsWith('<')) return;
@@ -2850,34 +2850,34 @@ class HomeController extends GetxController {
         final raw = jsonDecode(response.body);
 
         if (raw is Map<String, dynamic>) {
-          print("RAW JAVA RESPONSE : $raw");
+          debugPrint("RAW JAVA RESPONSE : $raw");
 
           final dashboardData = TodayDashboardData.fromJson(raw);
 
           todayDashboard.value = dashboardData;
           todayDashboard.refresh();
 
-          print(
+          debugPrint(
             "UPDATED -> Orders: ${dashboardData.totalOrdersToday}",
           );
 
-          print(
+          debugPrint(
             "UPDATED -> Earnings: ${dashboardData.totalEarningsToday}",
           );
 
-          print(
+          debugPrint(
             "UPDATED -> Incentive Bonus: ${dashboardData.driverIncentiveBonus}",
           );
 
           _todayDashboardLastFetchAt = DateTime.now();
         }
       } else {
-        print("API ERROR : ${response.statusCode}");
-        print("API BODY : ${response.body}");
+        debugPrint("API ERROR : ${response.statusCode}");
+        debugPrint("API BODY : ${response.body}");
       }
     } catch (e, stackTrace) {
-      print("ERROR : $e");
-      print("STACKTRACE : $stackTrace");
+      debugPrint("ERROR : $e");
+      debugPrint("STACKTRACE : $stackTrace");
 
       AppLogger.log(
         'Today dashboard fetch failed: $e',
