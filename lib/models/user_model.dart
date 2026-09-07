@@ -189,7 +189,7 @@ class UserModel {
         json['password']?.toString();
     firstName = json['firstName'];
     lastName = json['lastName'];
-    profilePictureURL = json['profilePictureURL'] ?? json['profilePicUrl'];
+    profilePictureURL = json['profilePicUrl'];
     fcmToken = json['fcmToken'];
     countryCode = json['countryCode'];
     if (json['phoneNumber'] != null) {

@@ -488,6 +488,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
 import '../utils/common.dart';
+import 'dash_board_controller.dart';
 
 class EditProfileController extends GetxController {
   // ============================================================
@@ -1062,8 +1063,15 @@ class EditProfileController extends GetxController {
       userModel.value.lastName =
           lastNameController.value.text;
 
+      // Append cache-busting timestamp so CachedNetworkImage
+      // fetches the fresh image instead of serving the old cached one.
+      final plainUrl = profileImage.value;
+      final cacheBustedUrl = plainUrl.contains('?')
+          ? '${plainUrl}&v=${DateTime.now().millisecondsSinceEpoch}'
+          : '${plainUrl}?v=${DateTime.now().millisecondsSinceEpoch}';
+
       userModel.value.profilePictureURL =
-          profileImage.value;
+          cacheBustedUrl;
 
       userModel.value.zoneId =
           selectedZone.value.id;
@@ -1075,6 +1083,16 @@ class EditProfileController extends GetxController {
       await FireStoreUtils.updateUser(
         userModel.value,
       );
+
+      // Sync Constant.userModel so other screens pick up the change
+      Constant.userModel = userModel.value;
+
+      // Sync DashBoardController so ProfileScreen rebuilds with new data
+      if (Get.isRegistered<DashBoardController>()) {
+        final dashCtrl = Get.find<DashBoardController>();
+        dashCtrl.userModel.value = UserModel.fromJson(userModel.value.toJson());
+        dashCtrl.userModel.refresh();
+      }
 
       ShowToastDialog.closeLoader();
 

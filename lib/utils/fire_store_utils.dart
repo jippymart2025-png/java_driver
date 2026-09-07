@@ -126,22 +126,35 @@ class FireStoreUtils {
       return false;
     }
   }
-  static Future<UserModel?> getUserProfile(String uuid, {bool forceRefresh = false}) async {
-    if (uuid.trim().isEmpty) return null;
+  static Future<UserModel?> getUserProfile(
+      String uuid, {
+        bool forceRefresh = false,
+      }) async {
+    if (uuid.trim().isEmpty) {
+      return null;
+    }
 
     final cached = _profileCache[uuid];
-    if (!forceRefresh && cached != null && !cached.isExpired) {
+
+    if (!forceRefresh &&
+        cached != null &&
+        !cached.isExpired) {
       return cached.user;
     }
-    if (!forceRefresh && _profileInFlight.containsKey(uuid)) {
+
+    if (!forceRefresh &&
+        _profileInFlight.containsKey(uuid)) {
       return _profileInFlight[uuid];
     }
 
     final future = () async {
       try {
         final httpClient = HttpClientService();
+
         final response = await httpClient.get(
-          Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$uuid'),
+          Uri.parse(
+            '${Constant.baseUrl}driver/getDriverDetails?driverId=$uuid',
+          ),
           headers: await getHeaders(),
           cacheStrategy: CacheStrategy.driverProfile,
           customTTL: _profileCacheTtl,
@@ -149,53 +162,132 @@ class FireStoreUtils {
           forceRefresh: forceRefresh,
           timeout: const Duration(seconds: 10),
         );
+
+        debugPrint(
+          "getDriverDetails status: ${response.statusCode}",
+        );
+
+        debugPrint(
+          "getDriverDetails response: ${response.body}",
+        );
+
         if (response.statusCode == 200) {
-          final cleaned = sanitizeHttpJsonBody(response.body);
-          final Map<String, dynamic> data = json.decode(cleaned);
+          final cleaned =
+          sanitizeHttpJsonBody(response.body);
+
+          final Map<String, dynamic> data =
+          json.decode(cleaned);
 
           Map<String, dynamic> userDetails;
-          if (data.containsKey('data') && data['data'] is Map) {
-            userDetails = data['data'] as Map<String, dynamic>;
+
+          if (data.containsKey('data') &&
+              data['data'] is Map) {
+            userDetails =
+            Map<String, dynamic>.from(
+              data['data'],
+            );
           } else {
             userDetails = data;
           }
 
           if (userDetails.isNotEmpty) {
-            if (userDetails.containsKey('driverId') && !userDetails.containsKey('id')) {
-              userDetails['id'] = userDetails['driverId'];
+            // ----------------------------------------------------
+            // DRIVER ID -> ID
+            // ----------------------------------------------------
+
+            if (userDetails.containsKey('driverId') &&
+                !userDetails.containsKey('id')) {
+              userDetails['id'] =
+              userDetails['driverId'];
             }
+
+            // ----------------------------------------------------
+            // PROFILE IMAGE
+            // API:
+            // profilePicUrl
+            //
+            // MODEL:
+            // profilePictureURL
+            // ----------------------------------------------------
+
+            if (userDetails.containsKey(
+              'profilePicUrl',
+            )) {
+              userDetails['profilePictureURL'] =
+              userDetails['profilePicUrl'];
+            }
+
+            // ----------------------------------------------------
+            // DEFAULT VALUES
+            // ----------------------------------------------------
+
             if (!userDetails.containsKey('role')) {
               userDetails['role'] = 'driver';
             }
+
             if (!userDetails.containsKey('active')) {
               userDetails['active'] = true;
             }
+
             if (!userDetails.containsKey('isActive')) {
               userDetails['isActive'] = true;
             }
 
-            final user = UserModel.fromJson(userDetails);
-            _profileCache[uuid] = _ProfileCacheEntry(
-              user: user,
-              cachedAt: DateTime.now(),
+            debugPrint(
+              "Mapped profilePictureURL: "
+                  "${userDetails['profilePictureURL']}",
             );
+
+            // ----------------------------------------------------
+            // CREATE USER MODEL
+            // ----------------------------------------------------
+
+            final user =
+            UserModel.fromJson(userDetails);
+
+            debugPrint(
+              "UserModel profilePictureURL: "
+                  "${user.profilePictureURL}",
+            );
+
+            // ----------------------------------------------------
+            // CACHE
+            // ----------------------------------------------------
+
+            _profileCache[uuid] =
+                _ProfileCacheEntry(
+                  user: user,
+                  cachedAt: DateTime.now(),
+                );
+
             return user;
           }
         }
+
         if (response.statusCode != 404) {
-          log("Failed to get user profile: ${response.statusCode} - ${response.body}");
+          log(
+            "Failed to get user profile: "
+                "${response.statusCode} - "
+                "${response.body}",
+          );
         }
       } on TimeoutException catch (e) {
-        log("getUserProfile timeout: $e");
+        log(
+          "getUserProfile timeout: $e",
+        );
       } catch (e) {
-        log("getUserProfile error: $e");
+        log(
+          "getUserProfile error: $e",
+        );
       } finally {
         _profileInFlight.remove(uuid);
       }
+
       return null;
     }();
 
     _profileInFlight[uuid] = future;
+
     return future;
   }
   static Future<bool?> updateUserWalletHomeScreen({

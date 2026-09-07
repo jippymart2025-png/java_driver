@@ -7,13 +7,14 @@ import 'package:jippydriver_driver/app/home_screen/controller/home_controller.da
 import 'package:jippydriver_driver/app/home_screen/widgets/dashboard_metric_card.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Incentive config
 // ─────────────────────────────────────────────────────────────────────────────
-const int    _kBonusOrderTarget = 20;
+const int    _kBonusOrderTarget = 10;
 //const double _kBonusAmount      = 300.0;
 
 // =============================================================================
@@ -221,16 +222,7 @@ class _IncentiveCardState extends State<_IncentiveCard>
     try {
       final res = await http.post(
         Uri.parse('${Constant.baseUrl}driver-sql/delivery-amount/update'),
-        headers: {'Content-Type': 'application/json',
-            "Accept": "application/json", // ✅ MUST
-          },
-
-        // body: jsonEncode({
-        //   'user_id': Constant.userModel?.id,
-        //   //'amount'   : _kBonusAmount,
-        //   'amount' : widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0,
-        //   'bonus' : 1
-        // }),
+        headers: await getHeaders(),
         body: jsonEncode({
           'user_id': Constant.userModel?.id,
           'amount': bonusAmount,
