@@ -328,6 +328,7 @@ import 'package:jippydriver_driver/controllers/login_controller.dart';
 import 'package:jippydriver_driver/models/document_model.dart';
 import 'package:jippydriver_driver/models/driver_document_model.dart';
 import 'package:jippydriver_driver/utils/common.dart';
+import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 
 class VerificationController extends GetxController {
   // ---------------------------------------------------------------------------
@@ -530,6 +531,50 @@ class VerificationController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
+  // Refresh driver details (getDriverDetails) after a successful upload
+  // ---------------------------------------------------------------------------
+
+  Future<void> refreshAfterUpload() async {
+    try {
+      final urls = await _fetchDriverDocUrls();
+
+      profilePicUrl.value = urls['profilePic'] ?? '';
+      urls.remove('profilePic');
+
+      final uploaded = <Documents>[];
+      urls.forEach((id, url) {
+        if (id.isEmpty || url.trim().isEmpty) return;
+        uploaded.add(
+          Documents(
+            documentId: id,
+            frontImage: url,
+            status: 'uploaded',
+          ),
+        );
+      });
+      driverDocumentList.assignAll(uploaded);
+
+      final userId = await LoginController.getFirebaseId();
+      if (userId.isNotEmpty) {
+        final user = await FireStoreUtils.getUserProfile(
+          userId,
+          forceRefresh: true,
+        );
+        if (user != null) {
+          Constant.userModel = user;
+          if ((user.profilePictureURL ?? '').trim().isNotEmpty) {
+            profilePicUrl.value = user.profilePictureURL!;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('refreshAfterUpload error: $e');
+    }
+
+    update();
+  }
+
+  // ---------------------------------------------------------------------------
   // File for a given document type
   // ---------------------------------------------------------------------------
 
@@ -727,27 +772,11 @@ class VerificationController extends GetxController {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        String? newUrl;
-        try {
-          final body = jsonDecode(response.body);
-          if (body is Map<String, dynamic>) {
-            final data = body['data'];
-            if (data is Map && data['profilePicUrl'] != null) {
-              newUrl = data['profilePicUrl'].toString();
-            } else if (data is String && data.startsWith('http')) {
-              newUrl = data;
-            } else if (body['profilePicUrl'] != null) {
-              newUrl = body['profilePicUrl'].toString();
-            }
-          }
-        } catch (_) {}
-
-        if (newUrl != null && newUrl.trim().isNotEmpty) {
-          profilePicUrl.value = newUrl;
-          Constant.userModel?.profilePictureURL = newUrl;
-        }
-
         profilePicFile.value = null;
+
+        // Reload from getDriverDetails so the new photo shows on the UI.
+        await refreshAfterUpload();
+
         return true;
       }
 
@@ -978,8 +1007,8 @@ class VerificationController extends GetxController {
         rcCopyFile.value = null;
         drivingLicenseFile.value = null;
 
-        // Refresh documents.
-        await getDocument();
+        // Refresh documents + profile from getDriverDetails.
+        await refreshAfterUpload();
 
         update();
 
