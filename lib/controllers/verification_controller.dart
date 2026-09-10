@@ -337,6 +337,9 @@ class VerificationController extends GetxController {
   static String get _uploadDocumentsUrl =>
       '${Constant.baseUrl}fm/outlets/saveOrUpdateDocuments';
 
+  static String get _profilePicUrl =>
+      '${Constant.baseUrl}driver/saveOrUpdateProfilePic';
+
   static const Duration _httpTimeout = Duration(seconds: 45);
 
   // ---------------------------------------------------------------------------
@@ -362,6 +365,16 @@ class VerificationController extends GetxController {
   final Rxn<File> drivingLicenseFile = Rxn<File>();
 
   // ---------------------------------------------------------------------------
+  // Profile picture
+  // ---------------------------------------------------------------------------
+
+  final Rxn<File> profilePicFile = Rxn<File>();
+
+  final RxBool isUploadingProfilePic = false.obs;
+
+  final RxString profilePicUrl = ''.obs;
+
+  // ---------------------------------------------------------------------------
   // Image picker
   // ---------------------------------------------------------------------------
 
@@ -383,6 +396,7 @@ class VerificationController extends GetxController {
   void onInit() {
     super.onInit();
 
+    profilePicUrl.value = Constant.userModel?.profilePictureURL ?? '';
     getDocument();
   }
 
@@ -402,6 +416,9 @@ class VerificationController extends GetxController {
       documentList.assignAll(_buildDocumentTemplates());
 
       final urls = await _fetchDriverDocUrls();
+
+      profilePicUrl.value = urls['profilePic'] ?? '';
+      urls.remove('profilePic');
 
       final uploaded = <Documents>[];
       urls.forEach((id, url) {
@@ -503,6 +520,7 @@ class VerificationController extends GetxController {
         'pan': value(data['panDocUrl']),
         'rc': value(data['rcCopyDocUrl']),
         'drivingLicense': value(data['drivingLicenseDocUrl']),
+        'profilePic': value(data['profilePicUrl']),
       };
     } catch (e) {
       debugPrint('_fetchDriverDocUrls error: $e');
@@ -610,6 +628,173 @@ class VerificationController extends GetxController {
         return;
     }
 
+    update();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Profile picture
+  // ---------------------------------------------------------------------------
+
+  Future<void> pickProfilePic({required ImageSource source}) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        preferredCameraDevice: CameraDevice.front,
+      );
+
+      if (pickedFile == null) {
+        return;
+      }
+
+      Get.back(); // close the camera/gallery source sheet
+
+      profilePicFile.value = File(pickedFile.path);
+      update();
+
+      final ok = await submitProfilePic();
+      if (ok) {
+        ShowToastDialog.showToast(
+          'Profile photo uploaded successfully',
+        );
+      } else {
+        ShowToastDialog.showToast(
+          'Profile photo upload failed. Please try again.',
+        );
+      }
+    } catch (e) {
+      debugPrint('pickProfilePic error: $e');
+
+      ShowToastDialog.showToast(
+        'Unable to select profile photo',
+      );
+    }
+  }
+
+  Future<bool> submitProfilePic() async {
+    final file = profilePicFile.value;
+    if (file == null) {
+      return false;
+    }
+
+    final userId = await LoginController.getFirebaseId();
+    final modelId = Constant.userModel?.id ?? '';
+    final String driverId = modelId.trim().isNotEmpty ? modelId : userId;
+
+    if (driverId.trim().isEmpty) {
+      ShowToastDialog.showToast(
+        'Driver ID not found. Please login again.',
+      );
+      return false;
+    }
+
+    isUploadingProfilePic.value = true;
+    update();
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(_profilePicUrl),
+      );
+
+      request.fields['userId'] = driverId;
+      request.fields['userType'] = 'driver';
+      request.fields['profilePicUrl'] = '';
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'profilePicFile',
+          file.path,
+        ),
+      );
+
+      final token = await getAuthToken();
+      request.headers.addAll({
+        'accept': '*/*',
+        if (token != null && token.isNotEmpty) 'Authorization': token,
+      });
+
+      final streamedResponse = await request.send().timeout(_httpTimeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+        'Profile pic upload status: ${response.statusCode}',
+      );
+      debugPrint(
+        'Profile pic upload body: ${response.body}',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        String? newUrl;
+        try {
+          final body = jsonDecode(response.body);
+          if (body is Map<String, dynamic>) {
+            final data = body['data'];
+            if (data is Map && data['profilePicUrl'] != null) {
+              newUrl = data['profilePicUrl'].toString();
+            } else if (data is String && data.startsWith('http')) {
+              newUrl = data;
+            } else if (body['profilePicUrl'] != null) {
+              newUrl = body['profilePicUrl'].toString();
+            }
+          }
+        } catch (_) {}
+
+        if (newUrl != null && newUrl.trim().isNotEmpty) {
+          profilePicUrl.value = newUrl;
+          Constant.userModel?.profilePictureURL = newUrl;
+        }
+
+        profilePicFile.value = null;
+        return true;
+      }
+
+      String message = 'Failed to upload profile photo';
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          if (body['message'] != null) {
+            message = body['message'].toString();
+          } else if (body['error'] != null) {
+            message = body['error'].toString();
+          }
+        }
+      } catch (_) {
+        if (response.body.isNotEmpty) {
+          message = response.body;
+        }
+      }
+
+      ShowToastDialog.showToast(message);
+
+      return false;
+    } on TimeoutException {
+      ShowToastDialog.showToast(
+        'Request timed out. Please try again.',
+      );
+      return false;
+    } on SocketException catch (e) {
+      debugPrint('Profile pic upload socket error: $e');
+      ShowToastDialog.showToast(
+        'Unable to connect to server',
+      );
+      return false;
+    } catch (e) {
+      debugPrint('Profile pic upload error: $e');
+      ShowToastDialog.showToast(
+        'Something went wrong while uploading profile photo',
+      );
+      return false;
+    } finally {
+      isUploadingProfilePic.value = false;
+      update();
+    }
+  }
+
+  void clearProfilePic() {
+    profilePicFile.value = null;
     update();
   }
 

@@ -6,14 +6,11 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/controllers/verification_controller.dart';
 import 'package:jippydriver_driver/models/document_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
-
-import 'verification_details_upload_screen.dart';
 
 class VerificationScreen extends StatelessWidget {
   const VerificationScreen({super.key});
@@ -64,7 +61,7 @@ class VerificationScreen extends StatelessWidget {
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: _buildSelfieCard(controller, isDark),
+                  child: _buildSelfieCard(context, controller, isDark),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
@@ -249,27 +246,39 @@ class VerificationScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSelfieCard(VerificationController controller, bool isDark) {
-    final hasSelfie =
-        (Constant.userModel?.profilePictureURL ?? '').trim().isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: _SelfieCard(
-        isDark: isDark,
-        hasSelfie: hasSelfie,
-        onTap: () async {
-          await Get.to(
-            const VerificationDetailsUploadScreen(),
-            arguments: {
-              'selfieOnly': true,
-              'aadhaarNumber': '',
-              'drivingLicenseNumber': '',
-            },
-            transition: Transition.cupertino,
-          );
-          await controller.getDocument();
-        },
+  Widget _buildSelfieCard(
+      BuildContext context,
+      VerificationController controller,
+      bool isDark) {
+    return _SelfieCard(
+      isDark: isDark,
+      isUploading: controller.isUploadingProfilePic.value,
+      photoUrl: controller.profilePicUrl.value,
+      localFile: controller.profilePicFile.value,
+      onTap: () => _showProfilePicSourceSheet(context, controller),
+      onRemove: () => controller.clearProfilePic(),
+    );
+  }
+
+  void _showProfilePicSourceSheet(
+      BuildContext context, VerificationController controller) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (ctx) {
+        final dark =
+        Provider.of<DarkThemeProvider>(ctx, listen: false).getThem();
+        return _DocSourceSheet(
+          title: 'Upload Selfie / Profile Photo'.tr,
+          isDark: dark,
+          onCamera: () =>
+              controller.pickProfilePic(source: ImageSource.camera),
+          onGallery: () =>
+              controller.pickProfilePic(source: ImageSource.gallery),
+        );
+      },
     );
   }
 }
@@ -453,19 +462,30 @@ class _DocumentUploadCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _SelfieCard extends StatelessWidget {
   final bool isDark;
-  final bool hasSelfie;
+  final bool isUploading;
+  final String photoUrl;
+  final File? localFile;
   final VoidCallback onTap;
+  final VoidCallback onRemove;
 
   const _SelfieCard({
     required this.isDark,
-    required this.hasSelfie,
+    required this.isUploading,
+    required this.photoUrl,
+    required this.localFile,
     required this.onTap,
+    required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
-    final accent = hasSelfie ? Colors.green : Colors.orange;
-    final url = (Constant.userModel?.profilePictureURL ?? '').trim();
+    final hasLocal = localFile != null;
+    final hasUrl = photoUrl.trim().isNotEmpty;
+    final uploaded = hasLocal || hasUrl;
+    final accent = isUploading ? AppThemeData.primary300 : (uploaded ? Colors.green : Colors.orange);
+    final status = isUploading
+        ? 'Uploading'
+        : (uploaded ? 'Uploaded' : 'Pending');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -499,20 +519,22 @@ class _SelfieCard extends StatelessWidget {
                   child: SizedBox(
                     width: 56,
                     height: 56,
-                    child: hasSelfie && url.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: url,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => const Center(
-                                child: CircularProgressIndicator()),
-                            errorWidget: (_, __, ___) =>
-                            const Icon(Icons.person_rounded),
-                          )
-                        : Container(
-                            color: accent.withOpacity(0.1),
-                            child: Icon(Icons.face_rounded,
-                                color: accent, size: 26),
-                          ),
+                    child: hasLocal
+                        ? Image.file(localFile!, fit: BoxFit.cover)
+                        : hasUrl
+                            ? CachedNetworkImage(
+                                imageUrl: photoUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => const Center(
+                                    child: CircularProgressIndicator()),
+                                errorWidget: (_, __, ___) =>
+                                const Icon(Icons.person_rounded),
+                              )
+                            : Container(
+                                color: accent.withOpacity(0.1),
+                                child: Icon(Icons.face_rounded,
+                                    color: accent, size: 26),
+                              ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -532,7 +554,7 @@ class _SelfieCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Photo',
+                        isUploading ? 'Uploading photo…' : 'Photo',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark
@@ -551,21 +573,42 @@ class _SelfieCard extends StatelessWidget {
                     color: accent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    hasSelfie ? 'Uploaded' : 'Pending',
-                    style: TextStyle(
-                      color: accent,
-                      fontFamily: AppThemeData.medium,
-                      fontSize: 12,
-                    ),
-                  ),
+                  child: status == 'Uploading'
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2),
+                        )
+                      : Text(
+                          status,
+                          style: TextStyle(
+                            color: accent,
+                            fontFamily: AppThemeData.medium,
+                            fontSize: 12,
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 6),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: isDark ? AppThemeData.grey500 : AppThemeData.grey400,
-                  size: 20,
-                ),
+                if (hasLocal && !isUploading)
+                  InkWell(
+                    onTap: onRemove,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: Colors.red.shade400,
+                        size: 20,
+                      ),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: isDark ? AppThemeData.grey500 : AppThemeData.grey400,
+                    size: 20,
+                  ),
               ],
             ),
           ),
