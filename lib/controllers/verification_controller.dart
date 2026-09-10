@@ -322,6 +322,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:jippydriver_driver/app/dash_board_screen/dash_board_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/controllers/login_controller.dart';
@@ -376,6 +377,18 @@ class VerificationController extends GetxController {
   final RxString profilePicUrl = ''.obs;
 
   // ---------------------------------------------------------------------------
+  // Approval / dashboard redirect
+  // ---------------------------------------------------------------------------
+
+  final RxBool isApproved = false.obs;
+
+  Timer? _approvalPollTimer;
+
+  static const Duration _approvalPollInterval = Duration(seconds: 15);
+
+  bool _redirectedToDashboard = false;
+
+  // ---------------------------------------------------------------------------
   // Image picker
   // ---------------------------------------------------------------------------
 
@@ -398,11 +411,20 @@ class VerificationController extends GetxController {
     super.onInit();
 
     profilePicUrl.value = Constant.userModel?.profilePictureURL ?? '';
+    isApproved.value = Constant.userModel?.isDocumentVerify == true;
+
+    _startApprovalPolling();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkApprovalAndRedirect());
+    });
+
     getDocument();
   }
 
   @override
   void onClose() {
+    _stopApprovalPolling();
     super.onClose();
   }
 
@@ -419,7 +441,12 @@ class VerificationController extends GetxController {
       final urls = await _fetchDriverDocUrls();
 
       profilePicUrl.value = urls['profilePic'] ?? '';
+      final approvedValue = urls['isApproved'] ?? '';
       urls.remove('profilePic');
+      urls.remove('isApproved');
+
+      isApproved.value =
+          approvedValue == 'true' || approvedValue == '1';
 
       final uploaded = <Documents>[];
       urls.forEach((id, url) {
@@ -434,6 +461,8 @@ class VerificationController extends GetxController {
       });
 
       driverDocumentList.assignAll(uploaded);
+
+      await _checkApprovalAndRedirect();
     } catch (e) {
       debugPrint('getDocument error: $e');
     } finally {
@@ -522,6 +551,7 @@ class VerificationController extends GetxController {
         'rc': value(data['rcCopyDocUrl']),
         'drivingLicense': value(data['drivingLicenseDocUrl']),
         'profilePic': value(data['profilePicUrl']),
+        'isApproved': value(data['isApproved']),
       };
     } catch (e) {
       debugPrint('_fetchDriverDocUrls error: $e');
@@ -539,7 +569,12 @@ class VerificationController extends GetxController {
       final urls = await _fetchDriverDocUrls();
 
       profilePicUrl.value = urls['profilePic'] ?? '';
+      final approvedValue = urls['isApproved'] ?? '';
       urls.remove('profilePic');
+      urls.remove('isApproved');
+
+      isApproved.value =
+          approvedValue == 'true' || approvedValue == '1';
 
       final uploaded = <Documents>[];
       urls.forEach((id, url) {
@@ -562,16 +597,68 @@ class VerificationController extends GetxController {
         );
         if (user != null) {
           Constant.userModel = user;
+          isApproved.value = user.isDocumentVerify == true;
           if ((user.profilePictureURL ?? '').trim().isNotEmpty) {
             profilePicUrl.value = user.profilePictureURL!;
           }
         }
       }
+
+      await _checkApprovalAndRedirect();
     } catch (e) {
       debugPrint('refreshAfterUpload error: $e');
     }
 
     update();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Approval polling / dashboard redirect
+  // ---------------------------------------------------------------------------
+
+  void _startApprovalPolling() {
+    _approvalPollTimer?.cancel();
+    _approvalPollTimer = Timer.periodic(
+      _approvalPollInterval,
+      (_) => unawaited(_pollApproval()),
+    );
+  }
+
+  void _stopApprovalPolling() {
+    _approvalPollTimer?.cancel();
+    _approvalPollTimer = null;
+  }
+
+  Future<void> _pollApproval() async {
+    try {
+      final userId = await LoginController.getFirebaseId();
+      if (userId.isEmpty) return;
+
+      final user = await FireStoreUtils.getUserProfile(
+        userId,
+        forceRefresh: true,
+      );
+      if (user != null) {
+        Constant.userModel = user;
+        isApproved.value = user.isDocumentVerify == true;
+        await _checkApprovalAndRedirect();
+      }
+    } catch (e) {
+      debugPrint('_pollApproval error: $e');
+    }
+  }
+
+  Future<void> _checkApprovalAndRedirect() async {
+    if (!isApproved.value || _redirectedToDashboard) return;
+
+    _stopApprovalPolling();
+    _redirectedToDashboard = true;
+
+    Get.offAll(
+          () => DashBoardScreen(
+        userModel: Constant.userModel,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
