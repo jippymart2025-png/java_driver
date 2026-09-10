@@ -86,46 +86,46 @@ class FireStoreUtils {
     if (uuid.trim().isEmpty) return;
     _profileCache.remove(uuid);
   }
-  static Future<bool> isLogin() async {
-    bool isLogin = false;
-    String? userId =await  LoginController.getFirebaseId();
-    try {
-      isLogin = await userExistOrNot(userId)
-          .timeout(const Duration(seconds: 6), onTimeout: () {
-        log("isLogin timeout - returning false");
-        return false;
-      });
-    } catch (e) {
-      log("isLogin error: $e - returning false");
-      isLogin = false;
-    }
-      return isLogin;
-  }
-  static Future<bool> userExistOrNot(String uid) async {
-    try {
-      final response = await http.get(
-        Uri.parse('${Constant.baseUrl}driver-sql/users/$uid/exists'),
-      ).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        if (data['success'] == true) {
-          return data['data'] == true;
-        } else {
-          log("API returned success: false");
-          return false;
-        }
-      } else {
-        log("Failed to check user exist: ${response.statusCode} - ${response.body}");
-        return false;
-      }
-    } on TimeoutException catch (e) {
-      log("userExistOrNot timeout: $e");
-      return false;
-    } catch (e) {
-      log("userExistOrNot error: $e");
-      return false;
-    }
-  }
+  // static Future<bool> isLogin() async {
+  //   bool isLogin = false;
+  //   String? userId =await  LoginController.getFirebaseId();
+  //   try {
+  //     // isLogin = await userExistOrNot(userId)
+  //     //     .timeout(const Duration(seconds: 6), onTimeout: () {
+  //       log("isLogin timeout - returning false");
+  //       return false;
+  //     });
+  //   } catch (e) {
+  //     log("isLogin error: $e - returning false");
+  //     isLogin = false;
+  //   }
+  //     return isLogin;
+  // }
+  // static Future<bool> userExistOrNot(String uid) async {
+  //   try {
+  //     final response = await http.get(
+  //       Uri.parse('${Constant.baseUrl}driver-sql/users/$uid/exists'),
+  //     ).timeout(const Duration(seconds: 5));
+  //     if (response.statusCode == 200) {
+  //       final Map<String, dynamic> data = json.decode(response.body);
+  //       if (data['success'] == true) {
+  //         return data['data'] == true;
+  //       } else {
+  //         log("API returned success: false");
+  //         return false;
+  //       }
+  //     } else {
+  //       log("Failed to check user exist: ${response.statusCode} - ${response.body}");
+  //       return false;
+  //     }
+  //   } on TimeoutException catch (e) {
+  //     log("userExistOrNot timeout: $e");
+  //     return false;
+  //   } catch (e) {
+  //     log("userExistOrNot error: $e");
+  //     return false;
+  //   }
+  // }
   static Future<UserModel?> getUserProfile(
       String uuid, {
         bool forceRefresh = false,
@@ -961,14 +961,15 @@ class FireStoreUtils {
     }
   }
 
-  /// Fetches force-update config from GET driver-sql/forceupdate.
-  /// Response: { googlePlayLink, appStoreLink, app_version, force_update, min_app_version }
-  /// or { success: true, data: { ... } }. Updates Constant and returns true on success.
+  /// Fetches force-update config from GET api/fm/app-settings/getApplicationVersionByAppType.
+  /// Response: { googlePlayLink, appStoreLink, android_version, ios_version,
+  /// min_app_version, min_required_version, force_update } or { success, data: { ... } }.
+  /// Updates Constant and returns true on success.
   static Future<bool> getForceUpdateConfig() async {
     try {
       final response = await http.get(
-        Uri.parse('${Constant.baseUrl}driver-sql/forceupdate'),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        Uri.parse('${Constant.baseUrl}fm/app-settings/getApplicationVersionByAppType?appType=${Constant.userRoleDriver}'),
+        headers:  await getHeaders(),
       ).timeout(const Duration(seconds: 5));
       if (response.statusCode != 200) return false;
       final decoded = json.decode(response.body);
@@ -977,10 +978,11 @@ class FireStoreUtils {
           : Map<String, dynamic>.from(decoded as Map);
       Constant.googlePlayLink = (data['googlePlayLink'] ?? '').toString();
       Constant.appStoreLink = (data['appStoreLink'] ?? '').toString();
-      Constant.appVersion = (data['app_version'] ?? '').toString();
+      final platformVersion = Platform.isIOS ? data['ios_version'] : data['android_version'];
+      Constant.appVersion = (platformVersion ?? data['latest_version'] ?? data['app_version'] ?? '').toString();
       Constant.forceUpdateRequired = data['force_update'] == true;
-      Constant.minAppVersion = (data['min_app_version'] ?? data['minAppVersion'] ?? '').toString().trim();
-      Constant.showUpdate = data['show_update'] == true;
+      Constant.minAppVersion = (data['min_app_version'] ?? data['min_required_version'] ?? data['minAppVersion'] ?? '').toString().trim();
+      Constant.showUpdate = data['show_update'] == true || Constant.forceUpdateRequired || Constant.minAppVersion.isNotEmpty;
       log('getForceUpdateConfig: min_app_version=${Constant.minAppVersion}, force_update=${Constant.forceUpdateRequired}, show_update=${Constant.showUpdate}');
       return true;
     } catch (e) {

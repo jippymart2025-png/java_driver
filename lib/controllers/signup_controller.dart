@@ -51,6 +51,9 @@ class SignupController extends GetxController {
   final aadharNumberEditingController =
       TextEditingController().obs;
 
+  final pancardEditingController =
+      TextEditingController().obs;
+
   final drivingLicenseEditingController =
       TextEditingController().obs;
 
@@ -105,6 +108,7 @@ final selectedState = Rxn<StateModel>();
     familyMemberNameEditingController.value.dispose();
     familyMemberPhoneEditingController.value.dispose();
     aadharNumberEditingController.value.dispose();
+    pancardEditingController.value.dispose();
     drivingLicenseEditingController.value.dispose();
     rcNumberEditingController.value.dispose();
     buildingNumberEditingController.value.dispose();
@@ -528,6 +532,7 @@ final selectedState = Rxn<StateModel>();
       'familyMemberPhoneNumber':
       familyMemberPhoneEditingController.value.text.trim(),
       'aadharNumber': aadharNumberEditingController.value.text.trim(),
+      'panNumber': pancardEditingController.value.text.trim(),
       'drivingLicenseNumber':
       drivingLicenseEditingController.value.text.trim(),
       'buildingNumber': buildingNumberEditingController.value.text.trim(),

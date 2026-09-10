@@ -213,15 +213,15 @@ class LoginController extends GetxController {
       // ---------------------------------------------------------
       // 8. Check driver enabled/active
       // ---------------------------------------------------------
-      if (!_isDriverEnabled(userModel)) {
-        log('❌ Driver is disabled/inactive');
-
-        Get.offAll(
-              () => const LoginScreen(),
-        );
-
-        return;
-      }
+      // if (!_isDriverEnabled(userModel)) {
+      //   log('❌ Driver is disabled/inactive');
+      //
+      //   Get.offAll(
+      //         () => const LoginScreen(),
+      //   );
+      //
+      //   return;
+      // }
 
       // ---------------------------------------------------------
       // 9. Mandatory update check

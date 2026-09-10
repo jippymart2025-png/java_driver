@@ -409,6 +409,39 @@ class _SignupScreenState extends State<SignupScreen>
                     // ),
                   ),
                   const SizedBox(height: 16),
+                  _Animated(
+                    fade: _fadeAnims[10],
+                    slide: _slideAnims[10],
+                    child: TextFieldWidget(
+                      title: 'Pan Number'.tr,
+                      controller: controller.pancardEditingController.value,
+                      hintText: 'Enter Pan Number',
+                      textInputType: TextInputType.text,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(12),
+                        //AadhaarInputFormatter(),
+                      ],
+                      prefix: _FieldIcon(
+                        asset: 'assets/icons/ic_user.svg',
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, top: 4),
+                    // child: Text(
+                    //   'Format: 1234 5678 9012',
+                    //   style: TextStyle(
+                    //     fontSize: 12,
+                    //     color: isDark
+                    //         ? AppThemeData.grey400
+                    //         : AppThemeData.grey600,
+                    //   ),
+                    // ),
+                  ),
+                  const SizedBox(height: 16),
 
                   //--------Driving License Number---------
                   _Animated(

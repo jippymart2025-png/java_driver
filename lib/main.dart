@@ -119,14 +119,14 @@ Future<void> _warmupServices() async {
 }
 
 /// When the app returns to foreground, refresh [UserModel.location] from GPS if logged in.
-Future<void> _syncDriverLocationIfLoggedIn() async {
-  try {
-    if (!await FireStoreUtils.isLogin()) return;
-    await DriverLocationSync.syncDeviceLocationIntoUserModel();
-  } catch (e, st) {
-    debugPrint('Resume location sync: $e\n$st');
-  }
-}
+// Future<void> _syncDriverLocationIfLoggedIn() async {
+//   try {
+//     if (!await FireStoreUtils.isLogin()) return;
+//     await DriverLocationSync.syncDeviceLocationIntoUserModel();
+//   } catch (e, st) {
+//     debugPrint('Resume location sync: $e\n$st');
+//   }
+// }
 
 final RxBool isInPipMode = false.obs; // 👈 global reactive variable
 class MyApp extends StatefulWidget {
@@ -171,7 +171,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _audioInitializedAfterPause = true;
         unawaited(AudioPlayerService.initAudio());
       }
-      unawaited(_syncDriverLocationIfLoggedIn());
+      // unawaited(_syncDriverLocationIfLoggedIn());
       isInPipMode.value = false;
     } else {
       isInPipMode.value = false;

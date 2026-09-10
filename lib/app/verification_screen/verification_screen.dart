@@ -1,14 +1,18 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/controllers/verification_controller.dart';
 import 'package:jippydriver_driver/models/document_model.dart';
-import 'package:jippydriver_driver/models/driver_document_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
+
 import 'verification_details_upload_screen.dart';
 
 class VerificationScreen extends StatelessWidget {
@@ -36,143 +40,116 @@ class VerificationScreen extends StatelessWidget {
                 SliverToBoxAdapter(
                   child: _buildProgressBar(controller, isDark),
                 ),
-                SliverToBoxAdapter(
-                  child: _buildMandatoryIdentityFields(controller, isDark),
-                ),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 8),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                           (context, index) {
-                        final hasSelfie =
-                            (Constant.userModel?.profilePictureURL ?? "")
-                                .trim()
-                                .isNotEmpty;
-                        if (index == controller.documentList.length) {
-                          return _DocumentCard(
-                            documentModel: DocumentModel(
-                              title: "Selfie / Profile Photo",
-                              frontSide: true,
-                              backSide: false,
-                            ),
-                            documents: Documents(
-                              status: hasSelfie ? "uploaded" : "pending",
-                            ),
-                            isDark: isDark,
-                            onTap: () {
-                              if (!_validateMandatoryFields(controller)) {
-                                return;
-                              }
-                              Get.to(
-                                const VerificationDetailsUploadScreen(),
-                                arguments: {
-                                  'selfieOnly': true,
-                                  'aadhaarNumber':
-                                      controller.aadhaarNumberController.text.trim(),
-                                  'drivingLicenseNumber':
-                                      controller.drivingLicenseController.text.trim(),
-                                },
-                                transition: Transition.cupertino,
-                              )?.then((value) {
-                                if (value == true) {
-                                  controller.getDocument();
-                                }
-                              });
-                            },
-                          );
-                        }
                         final doc = controller.documentList[index];
-                        final uploadedDoc = _findDocument(
-                            controller.driverDocumentList.toList(), doc);
-                        return _DocumentCard(
+                        return _DocumentUploadCard(
                           documentModel: doc,
-                          documents: uploadedDoc,
+                          file: controller.fileForType(doc.id ?? ''),
+                          uploadedUrl:
+                          _uploadedUrl(controller, doc.id ?? ''),
                           isDark: isDark,
-                          onTap: () {
-                            if (!_validateMandatoryFields(controller)) {
-                              return;
-                            }
-                            Get.to(
-                              const VerificationDetailsUploadScreen(),
-                              arguments: {
-                                'documentModel': doc,
-                                'aadhaarNumber':
-                                    controller.aadhaarNumberController.text.trim(),
-                                'drivingLicenseNumber':
-                                    controller.drivingLicenseController.text.trim(),
-                              },
-                              transition: Transition.cupertino,
-                            )?.then((value) {
-                              if (value == true) {
-                                controller.getDocument();
-                              }
-                            });
-                          },
+                          onTap: () =>
+                              _showSourceSheet(context, controller, doc),
+                          onRemove: () =>
+                              controller.removeDocument(doc.id ?? ''),
                         );
                       },
-                      childCount: controller.documentList.length + 1,
+                      childCount: controller.documentList.length,
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(
-                    child: SizedBox(height: 24)),
+                SliverToBoxAdapter(
+                  child: _buildSelfieCard(controller, isDark),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
             ),
           ),
           bottomNavigationBar: controller.isLoading.value
               ? const SizedBox.shrink()
               : SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: ElevatedButton(
-                      onPressed: controller.isSubmittingIdentity.value
-                          ? null
-                          : () async {
-                              final ok = await controller.submitIdentityDetails();
-                              if (ok) {
-                                Get.to(() => const _VerificationPendingScreen());
-                              } else {
-                                ShowToastDialog.showToast(
-                                  "Failed to submit details. Please try again.",
-                                );
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        backgroundColor: AppThemeData.driverApp300,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: controller.isSubmittingIdentity.value
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              "Submit Details".tr,
-                              style: const TextStyle(
-                                fontFamily: AppThemeData.semiBold,
-                                fontSize: 15,
-                              ),
-                            ),
-                    ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: ElevatedButton(
+                onPressed: controller.isSubmittingIdentity.value
+                    ? null
+                    : () async {
+                  final ok =
+                  await controller.submitIdentityDetails();
+                  if (ok) {
+                    ShowToastDialog.showToast(
+                      'Documents uploaded successfully',
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: AppThemeData.driverApp300,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                child: controller.isSubmittingIdentity.value
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Text(
+                  "Submit Details".tr,
+                  style: const TextStyle(
+                    fontFamily: AppThemeData.semiBold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
   }
 
-  Documents _findDocument(List<Documents> list, DocumentModel doc) {
-    final match = list.where((e) => e.documentId == doc.id);
-    return match.isNotEmpty ? match.first : Documents();
+  String _uploadedUrl(VerificationController controller, String id) {
+    for (final e in controller.driverDocumentList) {
+      if (e.documentId == id && (e.frontImage ?? '').trim().isNotEmpty) {
+        return e.frontImage!;
+      }
+    }
+    return '';
+  }
+
+  void _showSourceSheet(
+      BuildContext context,
+      VerificationController controller,
+      DocumentModel doc) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final dark =
+        Provider.of<DarkThemeProvider>(ctx, listen: false).getThem();
+        return _DocSourceSheet(
+          title: 'Upload ${doc.title}'.tr,
+          isDark: dark,
+          onCamera: () => controller.pickDocument(
+              type: doc.id ?? '', source: ImageSource.camera),
+          onGallery: () => controller.pickDocument(
+              type: doc.id ?? '', source: ImageSource.gallery),
+        );
+      },
+    );
   }
 
   Widget _buildHeader(bool isDark) {
@@ -219,14 +196,13 @@ class VerificationScreen extends StatelessWidget {
   }
 
   Widget _buildProgressBar(VerificationController controller, bool isDark) {
-    // Selfie is optional and not part of required verification count.
     final total = controller.documentList.length;
     if (total == 0) return const SizedBox();
 
-    final approved = controller.driverDocumentList
-        .where((d) => d.status == "approved")
+    final done = controller.driverDocumentList
+        .where((d) => d.status == 'approved' || d.status == 'uploaded')
         .length;
-    final progress = approved / total;
+    final progress = (done / total).clamp(0.0, 1.0);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -237,7 +213,7 @@ class VerificationScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "$approved of $total verified",
+                "$done of $total uploaded",
                 style: TextStyle(
                   fontSize: 13,
                   fontFamily: AppThemeData.medium,
@@ -273,138 +249,57 @@ class VerificationScreen extends StatelessWidget {
     );
   }
 
-  bool _validateMandatoryFields(VerificationController controller) {
-    final aadhaar = controller.aadhaarNumberController.text.trim();
-    final dl = controller.drivingLicenseController.text.trim();
-    if (aadhaar.isEmpty) {
-      ShowToastDialog.showToast("Aadhaar number is required".tr);
-      return false;
-    }
-    if (dl.isEmpty) {
-      ShowToastDialog.showToast("Driving license number is required".tr);
-      return false;
-    }
-    return true;
-  }
-
-  Widget _buildMandatoryIdentityFields(
-      VerificationController controller, bool isDark) {
+  Widget _buildSelfieCard(VerificationController controller, bool isDark) {
+    final hasSelfie =
+        (Constant.userModel?.profilePictureURL ?? '').trim().isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppThemeData.grey900 : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark ? AppThemeData.grey700 : AppThemeData.grey200,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Required Details".tr,
-              style: TextStyle(
-                color: isDark ? AppThemeData.grey100 : AppThemeData.grey900,
-                fontFamily: AppThemeData.semiBold,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: controller.aadhaarNumberController,
-              keyboardType: TextInputType.text,
-              decoration: InputDecoration(
-                labelText: "Aadhaar Number *".tr,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: controller.drivingLicenseController,
-              keyboardType: TextInputType.text,
-              decoration: InputDecoration(
-                labelText: "Driving License Number *".tr,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                isDense: true,
-              ),
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: _SelfieCard(
+        isDark: isDark,
+        hasSelfie: hasSelfie,
+        onTap: () async {
+          await Get.to(
+            const VerificationDetailsUploadScreen(),
+            arguments: {
+              'selfieOnly': true,
+              'aadhaarNumber': '',
+              'drivingLicenseNumber': '',
+            },
+            transition: Transition.cupertino,
+          );
+          await controller.getDocument();
+        },
       ),
     );
   }
 }
 
-class _VerificationPendingScreen extends StatelessWidget {
-  const _VerificationPendingScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.hourglass_top_rounded,
-                  size: 56,
-                  color: AppThemeData.primary300,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "Please wait until approval".tr,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontFamily: AppThemeData.semiBold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Your verification details were submitted. We will notify you once approved."
-                      .tr,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontFamily: AppThemeData.regular,
-                  ),
-                ),
-
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DocumentCard extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Document Upload Card
+// ─────────────────────────────────────────────────────────────────────────────
+class _DocumentUploadCard extends StatelessWidget {
   final DocumentModel documentModel;
-  final Documents documents;
+  final File? file;
+  final String uploadedUrl;
   final bool isDark;
   final VoidCallback onTap;
+  final VoidCallback onRemove;
 
-  const _DocumentCard({
+  const _DocumentUploadCard({
     required this.documentModel,
-    required this.documents,
+    required this.file,
+    required this.uploadedUrl,
     required this.isDark,
     required this.onTap,
+    required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
-    final status = documents.status ?? "";
-    final statusConfig = _statusConfig(status);
+    final hasLocal = file != null;
+    final hasUrl = uploadedUrl.trim().isNotEmpty;
+    final uploaded = hasLocal || hasUrl;
+    final accent = uploaded ? Colors.green : Colors.orange;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -413,13 +308,13 @@ class _DocumentCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+          child: Container(
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: isDark ? AppThemeData.grey900 : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: statusConfig['borderColor'] as Color,
+                color: accent.withOpacity(0.3),
                 width: 1.5,
               ),
               boxShadow: [
@@ -431,80 +326,80 @@ class _DocumentCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Row(
-                children: [
-                  // Icon container
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: (statusConfig['color'] as Color).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      statusConfig['icon'] as IconData,
-                      color: statusConfig['color'] as Color,
-                      size: 22,
+            child: Row(
+              children: [
+                // Thumbnail / placeholder
+                _buildThumb(uploaded, hasLocal, accent),
+                const SizedBox(width: 14),
+                // Title + subtitle
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${documentModel.title}',
+                        style: TextStyle(
+                          color: isDark
+                              ? AppThemeData.grey100
+                              : AppThemeData.grey900,
+                          fontFamily: AppThemeData.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _sideLabel(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? AppThemeData.grey400
+                              : AppThemeData.grey600,
+                          fontFamily: AppThemeData.regular,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Status badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    uploaded ? 'Uploaded' : 'Pending',
+                    style: TextStyle(
+                      color: accent,
+                      fontFamily: AppThemeData.medium,
+                      fontSize: 12,
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  // Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "${documentModel.title}",
-                          style: TextStyle(
-                            color: isDark
-                                ? AppThemeData.grey100
-                                : AppThemeData.grey900,
-                            fontFamily: AppThemeData.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _sideLabel(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? AppThemeData.grey400
-                                : AppThemeData.grey600,
-                            fontFamily: AppThemeData.regular,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Status badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: (statusConfig['color'] as Color).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      statusConfig['label'] as String,
-                      style: TextStyle(
-                        color: statusConfig['color'] as Color,
-                        fontFamily: AppThemeData.medium,
-                        fontSize: 12,
+                ),
+                const SizedBox(width: 6),
+                if (hasLocal)
+                  InkWell(
+                    onTap: onRemove,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: Colors.red.shade400,
+                        size: 20,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                  )
+                else
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: isDark ? AppThemeData.grey500 : AppThemeData.grey400,
+                    color: isDark
+                        ? AppThemeData.grey500
+                        : AppThemeData.grey400,
                     size: 20,
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -512,785 +407,278 @@ class _DocumentCard extends StatelessWidget {
     );
   }
 
-  String _sideLabel() {
-    final parts = <String>[];
-    if (documentModel.frontSide == true) parts.add("Front");
-    if (documentModel.backSide == true) parts.add("Back");
-    return "${parts.join(' & ')} Photo";
+  Widget _buildThumb(bool uploaded, bool hasLocal, Color accent) {
+    if (!uploaded) {
+      return Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(Icons.badge_rounded, color: accent, size: 26),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: hasLocal
+            ? Image.file(file!, fit: BoxFit.cover)
+            : CachedNetworkImage(
+                imageUrl: uploadedUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, __) =>
+                const Center(child: CircularProgressIndicator()),
+                errorWidget: (_, __, ___) =>
+                const Icon(Icons.broken_image),
+              ),
+      ),
+    );
   }
 
-  Map<String, dynamic> _statusConfig(String status) {
-    switch (status) {
-      case "approved":
-        return {
-          'label': "Verified",
-          'color': Colors.green,
-          'icon': Icons.check_circle_rounded,
-          'borderColor': Colors.green.withOpacity(0.3),
-        };
-      case "rejected":
-        return {
-          'label': "Rejected",
-          'color': Colors.red,
-          'icon': Icons.cancel_rounded,
-          'borderColor': Colors.red.withOpacity(0.3),
-        };
-      case "uploaded":
-        return {
-          'label': "In Review",
-          'color': AppThemeData.primary300,
-          'icon': Icons.hourglass_top_rounded,
-          'borderColor': AppThemeData.primary300.withOpacity(0.3),
-        };
-      default:
-        return {
-          'label': "Pending",
-          'color': Colors.orange,
-          'icon': Icons.upload_file_rounded,
-          'borderColor': Colors.orange.withOpacity(0.2),
-        };
-    }
+  String _sideLabel() {
+    final parts = <String>[];
+    if (documentModel.frontSide == true) parts.add('Front');
+    if (documentModel.backSide == true) parts.add('Back');
+    if (parts.isEmpty) return 'Photo';
+    return '${parts.join(' & ')} Photo';
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Selfie Card
+// ─────────────────────────────────────────────────────────────────────────────
+class _SelfieCard extends StatelessWidget {
+  final bool isDark;
+  final bool hasSelfie;
+  final VoidCallback onTap;
 
+  const _SelfieCard({
+    required this.isDark,
+    required this.hasSelfie,
+    required this.onTap,
+  });
 
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import 'package:provider/provider.dart';
-//
-// import 'package:jippydriver_driver/constant/constant.dart';
-// import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
-// import 'package:jippydriver_driver/controllers/verification_controller.dart';
-// import 'package:jippydriver_driver/models/document_model.dart';
-// import 'package:jippydriver_driver/models/driver_document_model.dart';
-// import 'package:jippydriver_driver/themes/app_them_data.dart';
-// import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
-// import 'verification_details_upload_screen.dart';
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Verification Screen
-// // ─────────────────────────────────────────────────────────────────────────────
-// class VerificationScreen extends StatelessWidget {
-//   const VerificationScreen({super.key});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final themeChange = Provider.of<DarkThemeProvider>(context);
-//     final bool isDark = themeChange.getThem();
-//
-//     // Use Get.put so the controller instance is shared and survives
-//     // navigation to the upload sub-screen.
-//     return GetBuilder<VerificationController>(
-//       init: Get.isRegistered<VerificationController>()
-//           ? Get.find<VerificationController>()
-//           : Get.put(VerificationController()),
-//       builder: (controller) {
-//         return Obx(() {
-//           if (controller.isLoading.value) {
-//             return Scaffold(
-//               backgroundColor:
-//               isDark ? AppThemeData.surfaceDark : AppThemeData.surface,
-//               body: const Center(child: CircularProgressIndicator()),
-//             );
-//           }
-//           return Scaffold(
-//             backgroundColor:
-//             isDark ? AppThemeData.surfaceDark : AppThemeData.surface,
-//             body: SafeArea(
-//               child: RefreshIndicator(
-//                 color: AppThemeData.driverApp300,
-//                 onRefresh: () => controller.getDocument(silent: true),
-//                 child: CustomScrollView(
-//                   physics: const AlwaysScrollableScrollPhysics(
-//                     parent: BouncingScrollPhysics(),
-//                   ),
-//                   cacheExtent: 280,
-//                   slivers: [
-//                   SliverToBoxAdapter(child: _Header(isDark: isDark)),
-//                   SliverToBoxAdapter(
-//                     child: _ProgressBar(
-//                       controller: controller,
-//                       isDark: isDark,
-//                     ),
-//                   ),
-//                   // Identity fields — only editable before submission
-//                   SliverToBoxAdapter(
-//                     child: _IdentityFields(
-//                       controller: controller,
-//                       isDark: isDark,
-//                     ),
-//                   ),
-//                   SliverPadding(
-//                     padding:
-//                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-//                     sliver: SliverList(
-//                       delegate: SliverChildBuilderDelegate(
-//                         (context, index) => RepaintBoundary(
-//                           child: _buildDocItem(
-//                               context, index, controller, isDark),
-//                         ),
-//                         childCount: controller.documentList.length + 1,
-//                         addAutomaticKeepAlives: false,
-//                         addRepaintBoundaries: false,
-//                       ),
-//                     ),
-//                   ),
-//                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
-//                 ],
-//                 ),
-//               ),
-//             ),
-//             // Show Submit button only when not yet submitted
-//             bottomNavigationBar: controller.isSubmitted.value
-//                 ? _SubmittedBanner(
-//                     isDark: isDark,
-//                     isDocumentVerified:
-//                         Constant.userModel?.isDocumentVerify == true,
-//                   )
-//                 : _SubmitButton(controller: controller, isDark: isDark),
-//           );
-//         });
-//       },
-//     );
-//   }
-//
-//   Widget _buildDocItem(
-//       BuildContext context,
-//       int index,
-//       VerificationController controller,
-//       bool isDark,
-//       ) {
-//     final isSelfieCard = index == controller.documentList.length;
-//
-//     if (isSelfieCard) {
-//       final hasSelfie =
-//           (Constant.userModel?.profilePictureURL ?? '').trim().isNotEmpty;
-//       return _DocumentCard(
-//         documentModel: DocumentModel(
-//           title: 'Selfie / Profile Photo',
-//           frontSide: true,
-//           backSide: false,
-//         ),
-//         // Selfie is not sent for admin review — avoid "In Review" like KYC docs.
-//         documents: Documents(status: hasSelfie ? 'profile_photo' : 'pending'),
-//         isDark: isDark,
-//         isLocked: false,
-//         onTap: () => _navigateToUpload(
-//           context,
-//           controller,
-//           selfieOnly: true,
-//         ),
-//       );
-//     }
-//
-//     final doc = controller.documentList[index];
-//     final uploaded = controller.findDocument(doc);
-//     return _DocumentCard(
-//       documentModel: doc,
-//       documents: uploaded,
-//       isDark: isDark,
-//       isLocked: false,
-//       onTap: () => _navigateToUpload(
-//         context,
-//         controller,
-//         documentModel: doc,
-//       ),
-//     );
-//   }
-//
-//   void _navigateToUpload(
-//       BuildContext context,
-//       VerificationController controller, {
-//         bool selfieOnly = false,
-//         DocumentModel? documentModel,
-//       }) {
-//     if (!controller.validateMandatoryFields()) return;
-//
-//     Get.to(
-//       const VerificationDetailsUploadScreen(),
-//       // Pass the controller instance tag so the upload screen can find it
-//       arguments: {
-//         'selfieOnly': selfieOnly,
-//         if (documentModel != null) 'documentModel': documentModel,
-//         'aadhaarNumber': controller.aadhaarNumberController.text.trim(),
-//         'drivingLicenseNumber':
-//         controller.drivingLicenseController.text.trim(),
-//       },
-//       transition: Transition.cupertino,
-//     )?.then((value) {
-//       if (value == true) {
-//         controller.getDocument(silent: true);
-//       }
-//     });
-//   }
-// }
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Header
-// // ─────────────────────────────────────────────────────────────────────────────
-// class _Header extends StatelessWidget {
-//   final bool isDark;
-//   const _Header({required this.isDark});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Padding(
-//       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-//       child: Column(
-//         crossAxisAlignment: CrossAxisAlignment.start,
-//         children: [
-//           Container(
-//             width: 48,
-//             height: 48,
-//             decoration: BoxDecoration(
-//               color: AppThemeData.driverApp300.withOpacity(0.12),
-//               borderRadius: BorderRadius.circular(14),
-//             ),
-//             child: Icon(Icons.verified_user_rounded,
-//                 color: AppThemeData.driverApp300, size: 26),
-//           ),
-//           const SizedBox(height: 12),
-//           Text(
-//             'Document Verification'.tr,
-//             style: TextStyle(
-//               color: isDark ? AppThemeData.grey100 : AppThemeData.grey900,
-//               fontFamily: AppThemeData.bold,
-//               fontSize: 28,
-//               height: 1.2,
-//             ),
-//           ),
-//           const SizedBox(height: 8),
-//           Text(
-//             'Complete your profile by uploading the required identity documents below.'
-//                 .tr,
-//             style: TextStyle(
-//               fontSize: 14,
-//               color: isDark ? AppThemeData.grey400 : AppThemeData.grey600,
-//               fontFamily: AppThemeData.regular,
-//               height: 1.5,
-//             ),
-//           ),
-//           const SizedBox(height: 20),
-//         ],
-//       ),
-//     );
-//   }
-// }
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Progress Bar
-// // ─────────────────────────────────────────────────────────────────────────────
-// class _ProgressBar extends StatelessWidget {
-//   final VerificationController controller;
-//   final bool isDark;
-//   const _ProgressBar({required this.controller, required this.isDark});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final total = controller.documentList.length;
-//     if (total == 0) return const SizedBox.shrink();
-//
-//     return Obx(() {
-//       final progress = controller.verificationProgress;
-//       final approved = controller.approvedCount;
-//
-//       return Padding(
-//         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-//         child: Column(
-//           crossAxisAlignment: CrossAxisAlignment.start,
-//           children: [
-//             Row(
-//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//               children: [
-//                 Text(
-//                   '$approved of $total verified',
-//                   style: TextStyle(
-//                     fontSize: 13,
-//                     fontFamily: AppThemeData.medium,
-//                     color:
-//                     isDark ? AppThemeData.grey300 : AppThemeData.grey600,
-//                   ),
-//                 ),
-//                 Text(
-//                   '${(progress * 100).toInt()}%',
-//                   style: TextStyle(
-//                     fontSize: 13,
-//                     fontFamily: AppThemeData.bold,
-//                     color: AppThemeData.driverApp300,
-//                   ),
-//                 ),
-//               ],
-//             ),
-//             const SizedBox(height: 8),
-//             ClipRRect(
-//               borderRadius: BorderRadius.circular(100),
-//               child: LinearProgressIndicator(
-//                 value: progress,
-//                 minHeight: 6,
-//                 backgroundColor: isDark
-//                     ? AppThemeData.grey800
-//                     : AppThemeData.grey200,
-//                 valueColor:
-//                 AlwaysStoppedAnimation<Color>(AppThemeData.driverApp300),
-//               ),
-//             ),
-//             const SizedBox(height: 16),
-//           ],
-//         ),
-//       );
-//     });
-//   }
-// }
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Identity Fields — locked after submission
-// // ─────────────────────────────────────────────────────────────────────────────
-// class _IdentityFields extends StatelessWidget {
-//   final VerificationController controller;
-//   final bool isDark;
-//   const _IdentityFields({required this.controller, required this.isDark});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Obx(() {
-//       final locked = controller.isSubmitted.value;
-//
-//       return Padding(
-//         padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-//         child: Container(
-//           padding: const EdgeInsets.all(16),
-//           decoration: BoxDecoration(
-//             color: isDark ? AppThemeData.grey900 : Colors.white,
-//             borderRadius: BorderRadius.circular(16),
-//             border: Border.all(
-//               color: locked
-//                   ? AppThemeData.driverApp300.withOpacity(0.35)
-//                   : (isDark
-//                   ? AppThemeData.grey700
-//                   : AppThemeData.grey200),
-//             ),
-//           ),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               Row(
-//                 children: [
-//                   Text(
-//                     'Required Details'.tr,
-//                     style: TextStyle(
-//                       color: isDark
-//                           ? AppThemeData.grey100
-//                           : AppThemeData.grey900,
-//                       fontFamily: AppThemeData.semiBold,
-//                       fontSize: 14,
-//                     ),
-//                   ),
-//                   if (locked) ...[
-//                     const SizedBox(width: 8),
-//                     Container(
-//                       padding: const EdgeInsets.symmetric(
-//                           horizontal: 8, vertical: 3),
-//                       decoration: BoxDecoration(
-//                         color: Colors.green.withOpacity(0.1),
-//                         borderRadius: BorderRadius.circular(20),
-//                       ),
-//                       child: Row(
-//                         mainAxisSize: MainAxisSize.min,
-//                         children: [
-//                           const Icon(Icons.lock_rounded,
-//                               size: 11, color: Colors.green),
-//                           const SizedBox(width: 4),
-//                           Text(
-//                             'Saved',
-//                             style: TextStyle(
-//                               color: Colors.green,
-//                               fontFamily: AppThemeData.medium,
-//                               fontSize: 11,
-//                             ),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ],
-//                 ],
-//               ),
-//               const SizedBox(height: 12),
-//               _IdentityTextField(
-//                 controller: controller.aadhaarNumberController,
-//                 label: 'Aadhaar Number *',
-//                 icon: Icons.credit_card_rounded,
-//                 isDark: isDark,
-//                 enabled: !locked,
-//               ),
-//               const SizedBox(height: 10),
-//               _IdentityTextField(
-//                 controller: controller.drivingLicenseController,
-//                 label: 'Driving License Number *',
-//                 icon: Icons.directions_car_rounded,
-//                 isDark: isDark,
-//                 enabled: !locked,
-//               ),
-//             ],
-//           ),
-//         ),
-//       );
-//     });
-//   }
-// }
-//
-// class _IdentityTextField extends StatelessWidget {
-//   final TextEditingController controller;
-//   final String label;
-//   final IconData icon;
-//   final bool isDark;
-//   final bool enabled;
-//
-//   const _IdentityTextField({
-//     required this.controller,
-//     required this.label,
-//     required this.icon,
-//     required this.isDark,
-//     required this.enabled,
-//   });
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return TextField(
-//       controller: controller,
-//       enabled: enabled,
-//       keyboardType: TextInputType.text,
-//       style: TextStyle(
-//         color: isDark ? AppThemeData.grey100 : AppThemeData.grey900,
-//         fontFamily: AppThemeData.medium,
-//         fontSize: 14,
-//       ),
-//       decoration: InputDecoration(
-//         labelText: label.tr,
-//         prefixIcon: Icon(icon,
-//             color: enabled
-//                 ? AppThemeData.driverApp300
-//                 : (isDark ? AppThemeData.grey600 : AppThemeData.grey400),
-//             size: 20),
-//         isDense: true,
-//         contentPadding:
-//         const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-//         filled: !enabled,
-//         fillColor: isDark
-//             ? AppThemeData.grey800.withOpacity(0.5)
-//             : AppThemeData.grey100,
-//         border: OutlineInputBorder(
-//           borderRadius: BorderRadius.circular(12),
-//           borderSide: BorderSide(
-//               color: isDark ? AppThemeData.grey700 : AppThemeData.grey200),
-//         ),
-//         enabledBorder: OutlineInputBorder(
-//           borderRadius: BorderRadius.circular(12),
-//           borderSide: BorderSide(
-//               color: isDark ? AppThemeData.grey700 : AppThemeData.grey300),
-//         ),
-//         focusedBorder: OutlineInputBorder(
-//           borderRadius: BorderRadius.circular(12),
-//           borderSide:
-//           BorderSide(color: AppThemeData.driverApp300, width: 1.5),
-//         ),
-//         disabledBorder: OutlineInputBorder(
-//           borderRadius: BorderRadius.circular(12),
-//           borderSide: BorderSide(
-//               color: isDark
-//                   ? AppThemeData.grey800
-//                   : AppThemeData.grey200),
-//         ),
-//       ),
-//     );
-//   }
-// }
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Submit Button
-// // ─────────────────────────────────────────────────────────────────────────────
-// class _SubmitButton extends StatelessWidget {
-//   final VerificationController controller;
-//   final bool isDark;
-//   const _SubmitButton({required this.controller, required this.isDark});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return SafeArea(
-//       child: Padding(
-//         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-//         child: Obx(() => ElevatedButton(
-//           onPressed: controller.isSubmittingIdentity.value
-//               ? null
-//               : () async {
-//             final ok =
-//             await controller.submitIdentityDetails();
-//             if (ok) {
-//               ShowToastDialog.showToast(
-//                   'Details submitted successfully!'.tr);
-//             } else {
-//               ShowToastDialog.showToast(
-//                   'Failed to submit. Please try again.'.tr);
-//             }
-//           },
-//           style: ElevatedButton.styleFrom(
-//             minimumSize: const Size.fromHeight(52),
-//             backgroundColor: AppThemeData.driverApp300,
-//             foregroundColor: Colors.white,
-//             shape: RoundedRectangleBorder(
-//                 borderRadius: BorderRadius.circular(14)),
-//             elevation: 0,
-//           ),
-//           child: controller.isSubmittingIdentity.value
-//               ? const SizedBox(
-//             height: 20,
-//             width: 20,
-//             child: CircularProgressIndicator(
-//                 color: Colors.white, strokeWidth: 2),
-//           )
-//               : Text(
-//             'Submit Details'.tr,
-//             style: const TextStyle(
-//               fontFamily: AppThemeData.semiBold,
-//               fontSize: 15,
-//             ),
-//           ),
-//         )),
-//       ),
-//     );
-//   }
-// }
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Submitted Banner — replaces the button after submission
-// // ─────────────────────────────────────────────────────────────────────────────
-// class _SubmittedBanner extends StatelessWidget {
-//   final bool isDark;
-//   /// Matches API `isDocumentVerify == 1` (parsed to bool on [UserModel]).
-//   final bool isDocumentVerified;
-//   const _SubmittedBanner({
-//     required this.isDark,
-//     this.isDocumentVerified = false,
-//   });
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final color =
-//         isDocumentVerified ? Colors.green : AppThemeData.primary300;
-//     return SafeArea(
-//       child: Padding(
-//         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-//         child: Container(
-//           height: 52,
-//           decoration: BoxDecoration(
-//             color: color.withOpacity(0.1),
-//             borderRadius: BorderRadius.circular(14),
-//             border: Border.all(color: color.withOpacity(0.3)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.center,
-//             children: [
-//               Icon(
-//                 isDocumentVerified
-//                     ? Icons.verified_rounded
-//                     : Icons.hourglass_top_rounded,
-//                 color: color,
-//                 size: 18,
-//               ),
-//               const SizedBox(width: 8),
-//               Text(
-//                 isDocumentVerified
-//                     ? 'Documents Approved'.tr
-//                     : 'Under Review — Awaiting Approval'.tr,
-//                 style: TextStyle(
-//                   color: color,
-//                   fontFamily: AppThemeData.semiBold,
-//                   fontSize: 14,
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
-//
-// // ─────────────────────────────────────────────────────────────────────────────
-// // Document Card
-// // ─────────────────────────────────────────────────────────────────────────────
-// class _DocumentCard extends StatelessWidget {
-//   final DocumentModel documentModel;
-//   final Documents documents;
-//   final bool isDark;
-//   final bool isLocked;
-//   final VoidCallback onTap;
-//
-//   const _DocumentCard({
-//     required this.documentModel,
-//     required this.documents,
-//     required this.isDark,
-//     required this.isLocked,
-//     required this.onTap,
-//   });
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final status = documents.status ?? '';
-//     final cfg = _statusConfig(status);
-//
-//     return Padding(
-//       padding: const EdgeInsets.only(bottom: 12),
-//       child: Material(
-//         color: Colors.transparent,
-//         child: InkWell(
-//           onTap: isLocked ? null : onTap,
-//           borderRadius: BorderRadius.circular(16),
-//           child: AnimatedContainer(
-//             duration: const Duration(milliseconds: 200),
-//             decoration: BoxDecoration(
-//               color: isDark ? AppThemeData.grey900 : Colors.white,
-//               borderRadius: BorderRadius.circular(16),
-//               border: Border.all(
-//                   color: cfg['borderColor'] as Color, width: 1.5),
-//               boxShadow: [
-//                 BoxShadow(
-//                   color: (isDark ? Colors.black : Colors.grey.shade200)
-//                       .withOpacity(0.5),
-//                   blurRadius: 8,
-//                   offset: const Offset(0, 2),
-//                 ),
-//               ],
-//             ),
-//             child: Padding(
-//               padding: const EdgeInsets.symmetric(
-//                   horizontal: 16, vertical: 16),
-//               child: Row(
-//                 children: [
-//                   // Icon
-//                   Container(
-//                     width: 48,
-//                     height: 48,
-//                     decoration: BoxDecoration(
-//                       color:
-//                       (cfg['color'] as Color).withOpacity(0.1),
-//                       borderRadius: BorderRadius.circular(12),
-//                     ),
-//                     child: Icon(cfg['icon'] as IconData,
-//                         color: cfg['color'] as Color, size: 22),
-//                   ),
-//                   const SizedBox(width: 14),
-//                   // Title + subtitle
-//                   Expanded(
-//                     child: Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         Text(
-//                           '${documentModel.title}',
-//                           style: TextStyle(
-//                             color: isDark
-//                                 ? AppThemeData.grey100
-//                                 : AppThemeData.grey900,
-//                             fontFamily: AppThemeData.bold,
-//                             fontSize: 15,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 4),
-//                         Text(
-//                           _sideLabel(),
-//                           style: TextStyle(
-//                             fontSize: 12,
-//                             color: isDark
-//                                 ? AppThemeData.grey400
-//                                 : AppThemeData.grey600,
-//                             fontFamily: AppThemeData.regular,
-//                           ),
-//                         ),
-//                       ],
-//                     ),
-//                   ),
-//                   // Status badge
-//                   Container(
-//                     padding: const EdgeInsets.symmetric(
-//                         horizontal: 10, vertical: 5),
-//                     decoration: BoxDecoration(
-//                       color:
-//                       (cfg['color'] as Color).withOpacity(0.1),
-//                       borderRadius: BorderRadius.circular(20),
-//                     ),
-//                     child: Text(
-//                       cfg['label'] as String,
-//                       style: TextStyle(
-//                         color: cfg['color'] as Color,
-//                         fontFamily: AppThemeData.medium,
-//                         fontSize: 12,
-//                       ),
-//                     ),
-//                   ),
-//                   const SizedBox(width: 8),
-//                   Icon(
-//                     isLocked
-//                         ? Icons.lock_outline_rounded
-//                         : Icons.chevron_right_rounded,
-//                     color: isDark
-//                         ? AppThemeData.grey500
-//                         : AppThemeData.grey400,
-//                     size: 20,
-//                   ),
-//                 ],
-//               ),
-//             ),
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-//
-//   String _sideLabel() {
-//     final parts = <String>[];
-//     if (documentModel.frontSide == true) parts.add('Front');
-//     if (documentModel.backSide == true) parts.add('Back');
-//     if (parts.isEmpty) return 'Photo';
-//     return '${parts.join(' & ')} Photo';
-//   }
-//
-//   Map<String, dynamic> _statusConfig(String status) {
-//     switch (status) {
-//       case 'approved':
-//         return {
-//           'label': 'Verified',
-//           'color': Colors.green,
-//           'icon': Icons.check_circle_rounded,
-//           'borderColor': Colors.green.withOpacity(0.3),
-//         };
-//       case 'rejected':
-//         return {
-//           'label': 'Rejected',
-//           'color': Colors.red,
-//           'icon': Icons.cancel_rounded,
-//           'borderColor': Colors.red.withOpacity(0.3),
-//         };
-//       case 'uploaded':
-//         return {
-//           'label': 'In Review',
-//           'color': AppThemeData.primary300,
-//           'icon': Icons.hourglass_top_rounded,
-//           'borderColor': AppThemeData.primary300.withOpacity(0.3),
-//         };
-//       case 'profile_photo':
-//         return {
-//           'label': 'Uploaded',
-//           'color': Colors.green,
-//           'icon': Icons.check_circle_rounded,
-//           'borderColor': Colors.green.withOpacity(0.3),
-//         };
-//       default:
-//         return {
-//           'label': 'Pending',
-//           'color': Colors.orange,
-//           'icon': Icons.upload_file_rounded,
-//           'borderColor': Colors.orange.withOpacity(0.2),
-//         };
-//     }
-//   }
-// }
+  @override
+  Widget build(BuildContext context) {
+    final accent = hasSelfie ? Colors.green : Colors.orange;
+    final url = (Constant.userModel?.profilePictureURL ?? '').trim();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? AppThemeData.grey900 : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: accent.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark ? Colors.black : Colors.grey.shade200)
+                      .withOpacity(0.5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: hasSelfie && url.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => const Center(
+                                child: CircularProgressIndicator()),
+                            errorWidget: (_, __, ___) =>
+                            const Icon(Icons.person_rounded),
+                          )
+                        : Container(
+                            color: accent.withOpacity(0.1),
+                            child: Icon(Icons.face_rounded,
+                                color: accent, size: 26),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selfie / Profile Photo'.tr,
+                        style: TextStyle(
+                          color: isDark
+                              ? AppThemeData.grey100
+                              : AppThemeData.grey900,
+                          fontFamily: AppThemeData.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Photo',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? AppThemeData.grey400
+                              : AppThemeData.grey600,
+                          fontFamily: AppThemeData.regular,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    hasSelfie ? 'Uploaded' : 'Pending',
+                    style: TextStyle(
+                      color: accent,
+                      fontFamily: AppThemeData.medium,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: isDark ? AppThemeData.grey500 : AppThemeData.grey400,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source Sheet (camera / gallery picker)
+// ─────────────────────────────────────────────────────────────────────────────
+class _DocSourceSheet extends StatelessWidget {
+  final String title;
+  final bool isDark;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+
+  const _DocSourceSheet({
+    required this.title,
+    required this.isDark,
+    required this.onCamera,
+    required this.onGallery,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: AppThemeData.bold,
+              fontSize: 16,
+              color: isDark ? AppThemeData.grey100 : AppThemeData.grey900,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _SourceOption(
+                icon: Icons.camera_alt_rounded,
+                label: 'Camera'.tr,
+                isDark: isDark,
+                onTap: onCamera,
+              ),
+              _SourceOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Gallery'.tr,
+                isDark: isDark,
+                onTap: onGallery,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SourceOption({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppThemeData.driverApp300.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: AppThemeData.driverApp300, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: AppThemeData.medium,
+              fontSize: 13,
+              color: isDark ? AppThemeData.grey300 : AppThemeData.grey700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
