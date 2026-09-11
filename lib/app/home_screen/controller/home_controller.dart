@@ -2712,7 +2712,7 @@ class HomeController extends GetxController {
     _initLocalNotifications();
     _initConnectivity();
     getDriver();
-    unawaited(_warmUpDriverCharges());
+    // unawaited(_warmUpDriverCharges());
     ensureTodayDashboardLoaded();
     _startPolling();
     super.onInit();
@@ -2733,65 +2733,65 @@ class HomeController extends GetxController {
   //  Driver charges warm-up
   // ══════════════════════════════════════════════════════════════════════
 
-  Future<void> _warmUpDriverCharges() async {
-    if (_driverChargesWarmupInFlight || _driverChargesApplied) return;
-    _driverChargesWarmupInFlight = true;
-    try {
-      final c = await FireStoreUtils.getDriverCharges(forceRefresh: true);
-
-      double toDouble(dynamic v, double fallback) {
-        if (v == null) return fallback;
-        if (v is num) return v.toDouble();
-        if (v is String) return double.tryParse(v.trim()) ?? fallback;
-        return fallback;
-      }
-
-      final pickup               = toDouble(c['pickup_rs_per_km'],                _pickupRsPerKm);
-      final deliveryFirstSlabKm  = toDouble(c['delivery_first_slab_km'],          _deliveryFirstSlabKm);
-      final deliveryRsPerKmFirst = toDouble(c['delivery_rs_per_km_first_slab'],   _deliveryRsPerKmFirstSlab);
-      final deliveryRsPerKmBeyond= toDouble(c['delivery_rs_per_km_beyond'],       _deliveryRsPerKmBeyond);
-      final shortTripMaxKm       = toDouble(c['delivery_short_trip_max_km'],      _deliveryShortTripMaxKm);
-      final shortTripBaseCharge  = toDouble(c['delivery_short_trip_base_charge'], _deliveryShortTripBaseCharge);
-
-      AppLogger.log(
-        'Driver charges warmup: pickup=$pickup firstSlab=${deliveryFirstSlabKm}km '
-            '@${deliveryRsPerKmFirst}/km beyond=${deliveryRsPerKmBeyond}/km '
-            'short≤${shortTripMaxKm}km=flat₹$shortTripBaseCharge',
-        tag: 'Charges',
-      );
-
-      final changed = pickup              != _pickupRsPerKm            ||
-          deliveryFirstSlabKm             != _deliveryFirstSlabKm      ||
-          deliveryRsPerKmFirst            != _deliveryRsPerKmFirstSlab ||
-          deliveryRsPerKmBeyond           != _deliveryRsPerKmBeyond    ||
-          shortTripMaxKm                  != _deliveryShortTripMaxKm   ||
-          shortTripBaseCharge             != _deliveryShortTripBaseCharge;
-
-      _pickupRsPerKm             = pickup;
-      _deliveryFirstSlabKm       = deliveryFirstSlabKm;
-      _deliveryRsPerKmFirstSlab  = deliveryRsPerKmFirst;
-      _deliveryRsPerKmBeyond     = deliveryRsPerKmBeyond;
-      _deliveryShortTripMaxKm    = shortTripMaxKm;
-      _deliveryShortTripBaseCharge = shortTripBaseCharge;
-
-      _driverChargesApplied   = true;
-      _driverChargesAppliedAt = DateTime.now();
-
-      if (changed && currentOrder.value.id != null && currentOrder.value.vendor != null) {
-        if (_isCalculatingCharges) {
-          _driverChargesNeedsRecalc = true;
-        } else {
-          await calculateOrderChargesInitial(fetchSurgeAndToPay: false);
-          _updateOrderWithCharges();
-          currentOrder.refresh();
-        }
-      }
-    } catch (e) {
-      AppLogger.log('Driver charges warmup failed: $e', tag: 'Charges');
-    } finally {
-      _driverChargesWarmupInFlight = false;
-    }
-  }
+  // Future<void> _warmUpDriverCharges() async {
+  //   if (_driverChargesWarmupInFlight || _driverChargesApplied) return;
+  //   _driverChargesWarmupInFlight = true;
+  //   try {
+  //     final c = await FireStoreUtils.getDriverCharges(forceRefresh: true);
+  //
+  //     double toDouble(dynamic v, double fallback) {
+  //       if (v == null) return fallback;
+  //       if (v is num) return v.toDouble();
+  //       if (v is String) return double.tryParse(v.trim()) ?? fallback;
+  //       return fallback;
+  //     }
+  //
+  //     final pickup               = toDouble(c['pickup_rs_per_km'],                _pickupRsPerKm);
+  //     final deliveryFirstSlabKm  = toDouble(c['delivery_first_slab_km'],          _deliveryFirstSlabKm);
+  //     final deliveryRsPerKmFirst = toDouble(c['delivery_rs_per_km_first_slab'],   _deliveryRsPerKmFirstSlab);
+  //     final deliveryRsPerKmBeyond= toDouble(c['delivery_rs_per_km_beyond'],       _deliveryRsPerKmBeyond);
+  //     final shortTripMaxKm       = toDouble(c['delivery_short_trip_max_km'],      _deliveryShortTripMaxKm);
+  //     final shortTripBaseCharge  = toDouble(c['delivery_short_trip_base_charge'], _deliveryShortTripBaseCharge);
+  //
+  //     AppLogger.log(
+  //       'Driver charges warmup: pickup=$pickup firstSlab=${deliveryFirstSlabKm}km '
+  //           '@${deliveryRsPerKmFirst}/km beyond=${deliveryRsPerKmBeyond}/km '
+  //           'short≤${shortTripMaxKm}km=flat₹$shortTripBaseCharge',
+  //       tag: 'Charges',
+  //     );
+  //
+  //     final changed = pickup              != _pickupRsPerKm            ||
+  //         deliveryFirstSlabKm             != _deliveryFirstSlabKm      ||
+  //         deliveryRsPerKmFirst            != _deliveryRsPerKmFirstSlab ||
+  //         deliveryRsPerKmBeyond           != _deliveryRsPerKmBeyond    ||
+  //         shortTripMaxKm                  != _deliveryShortTripMaxKm   ||
+  //         shortTripBaseCharge             != _deliveryShortTripBaseCharge;
+  //
+  //     _pickupRsPerKm             = pickup;
+  //     _deliveryFirstSlabKm       = deliveryFirstSlabKm;
+  //     _deliveryRsPerKmFirstSlab  = deliveryRsPerKmFirst;
+  //     _deliveryRsPerKmBeyond     = deliveryRsPerKmBeyond;
+  //     _deliveryShortTripMaxKm    = shortTripMaxKm;
+  //     _deliveryShortTripBaseCharge = shortTripBaseCharge;
+  //
+  //     _driverChargesApplied   = true;
+  //     _driverChargesAppliedAt = DateTime.now();
+  //
+  //     if (changed && currentOrder.value.id != null && currentOrder.value.vendor != null) {
+  //       if (_isCalculatingCharges) {
+  //         _driverChargesNeedsRecalc = true;
+  //       } else {
+  //         await calculateOrderChargesInitial(fetchSurgeAndToPay: false);
+  //         _updateOrderWithCharges();
+  //         currentOrder.refresh();
+  //       }
+  //     }
+  //   } catch (e) {
+  //     AppLogger.log('Driver charges warmup failed: $e', tag: 'Charges');
+  //   } finally {
+  //     _driverChargesWarmupInFlight = false;
+  //   }
+  // }
 
   // ══════════════════════════════════════════════════════════════════════
   //  Today dashboard

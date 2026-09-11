@@ -163,7 +163,7 @@ class _ProfileHeaderContent extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                user.fullName(),
+                                user.fullName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(

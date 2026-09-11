@@ -552,7 +552,7 @@ class LoginController extends GetxController {
               log(
                 '✅ Driver UserModel loaded: '
                     'id=${userModel.id}, '
-                    'name=${userModel.fullName()}',
+                    'name=${userModel.fullName}',
               );
             }
           } else {

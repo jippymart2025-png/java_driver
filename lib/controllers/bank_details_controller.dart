@@ -67,9 +67,10 @@ class BankDetailsController extends GetxController {
 
   Future<void> saveBank() async {
     ShowToastDialog.showLoader("Please wait".tr);
+
     try {
-      userModel.value.userBankDetails ??= UserBankDetails();
-      final details = userModel.value.userBankDetails!;
+      final details = userModel.value.userBankDetails ?? UserBankDetails();
+
       details
         ..accountNumber = accountNoController.value.text.trim()
         ..bankName = bankNameController.value.text.trim()
@@ -77,13 +78,24 @@ class BankDetailsController extends GetxController {
         ..holderName = holderNameController.value.text.trim()
         ..otherDetails = otherInfoController.value.text.trim();
 
+      userModel.value.userBankDetails = details;
+
       await FireStoreUtils.updateUser(userModel.value);
-      _dashBoardController.getUser();
-      ShowToastDialog.showToast("Bank details saved successfully".tr);
+
+      await _dashBoardController.getUser();
+
+      ShowToastDialog.showToast(
+        "Bank details saved successfully".tr,
+      );
+
       Get.back();
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Error saving bank: $e');
-      ShowToastDialog.showToast("Failed to save. Please try again.".tr);
+      debugPrintStack(stackTrace: stackTrace);
+
+      ShowToastDialog.showToast(
+        "Failed to save. Please try again.".tr,
+      );
     } finally {
       ShowToastDialog.closeLoader();
     }

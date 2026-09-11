@@ -413,10 +413,7 @@ class FireStoreUtils {
     try {
       final response = await http.put(
         Uri.parse('${Constant.baseUrl}driver/readyToAcceptIsToggle'),
-        headers: {
-          'accept': '*/*',
-          ...await getHeaders(),
-        },
+        headers: await getHeaders(),
         body: json.encode({
           'driverId': driverId,
           'readyToAcceptOrders': ready,
@@ -643,140 +640,140 @@ class FireStoreUtils {
       return false;
     }
   }
-  static Future<bool?> setDriverWalletRecord(
-      Map<String, dynamic> driverWalletTransaction) async {
-    try {
-      debugPrint("transactionModel id ${driverWalletTransaction['id']}");
-      final response = await http.post(
-        Uri.parse('${Constant.baseUrl}driver/wallet/withdraw-method'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode(driverWalletTransaction),
-      );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        debugPrint("Driver wallet record added successfully");
-        return true;
-      } else {
-        // Handle different error status codes
-        debugPrint("Failed to add driver wallet record: ${response.statusCode}");
-        return false;
-      }
-    } catch (error) {
-      debugPrint("Failed to update user: $error");
-      return false;
-    }
-  }
-  static Future<Map<String, dynamic>> getDriverCharges({
-    bool forceRefresh = false,
-  }) async {
-    // Fallback defaults (kept in sync with HomeController defaults)
-    const pickupDefault = 3.0;
-    const deliveryFirstSlabKmDefault = 4.0;
-    const deliveryRsPerKmFirstSlabDefault = 8.0;
-    const deliveryRsPerKmBeyondDefault = 10.0;
-    const deliveryShortTripMaxKmDefault = 2.0;
-    const deliveryShortTripBaseChargeDefault = 21.0;
-
-    double toDouble(dynamic v, double fallback) {
-      if (v == null) return fallback;
-      if (v is num) return v.toDouble();
-      if (v is String) return double.tryParse(v.trim()) ?? fallback;
-      return fallback;
-    }
-
-    try {
-      final httpClient = HttpClientService();
-      if (!_driverChargesCacheBustedOnce) {
-        _driverChargesCacheBustedOnce = true;
-        // Previously this endpoint was cached with a 24h TTL (settings strategy).
-        // Clear it once so updated backend prices reflect quickly.
-        try {
-          await httpClient.invalidateCache('driver-sql/charges');
-        } catch (_) {}
-      }
-      final response = await httpClient.get(
-        Uri.parse('${Constant.baseUrl}driver-sql/charges'),
-        headers: const {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        // Charges should be cached, but not for 24h (backend may update).
-        cacheStrategy: CacheStrategy.custom,
-        customTTL: const Duration(hours: 1),
-        useCache: true,
-        forceRefresh: forceRefresh,
-        timeout: const Duration(seconds: 8),
-        enableRetry: true,
-      );
-
-      final body = response.body.trim();
-      if (response.statusCode != 200 || body.startsWith('<')) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-
-      final jsonResponse = json.decode(body);
-      if (jsonResponse is! Map<String, dynamic>) {
-        throw Exception('Unexpected JSON shape');
-      }
-
-      if (jsonResponse['success'] != true) {
-        throw Exception('API returned success=false');
-      }
-
-      final dataRaw = jsonResponse['data'];
-      final data =
-          dataRaw is Map ? Map<String, dynamic>.from(dataRaw) : <String, dynamic>{};
-
-      final pickup = toDouble(data['pickup_rs_per_km'], pickupDefault);
-      final firstSlabKm =
-          toDouble(data['delivery_first_slab_km'], deliveryFirstSlabKmDefault);
-      final firstSlabRate = toDouble(
-        data['delivery_rs_per_km_first_slab'],
-        deliveryRsPerKmFirstSlabDefault,
-      );
-      final beyondRate = toDouble(
-        data['delivery_rs_per_km_beyond'],
-        deliveryRsPerKmBeyondDefault,
-      );
-      final shortTripMaxKm = toDouble(
-        data['delivery_short_trip_max_km'],
-        deliveryShortTripMaxKmDefault,
-      );
-      final shortTripBaseCharge = toDouble(
-        data['delivery_short_trip_base_charge'],
-        deliveryShortTripBaseChargeDefault,
-      );
-
-      log(
-        'Driver charges loaded '
-        '(forceRefresh=$forceRefresh) '
-        'pickup=$pickup firstSlabKm=$firstSlabKm '
-        'firstSlabRate=$firstSlabRate beyondRate=$beyondRate '
-        'shortTrip≤${shortTripMaxKm}km=flat₹$shortTripBaseCharge',
-      );
-
-      return {
-        'pickup_rs_per_km': pickup,
-        'delivery_first_slab_km': firstSlabKm,
-        'delivery_rs_per_km_first_slab': firstSlabRate,
-        'delivery_rs_per_km_beyond': beyondRate,
-        'delivery_short_trip_max_km': shortTripMaxKm,
-        'delivery_short_trip_base_charge': shortTripBaseCharge,
-      };
-    } catch (e) {
-      // Don't break the app if charges fetch fails; caller will use defaults.
-      debugPrint('❌ Error fetching driver charges (using defaults): $e');
-      return {
-        'pickup_rs_per_km': pickupDefault,
-        'delivery_first_slab_km': deliveryFirstSlabKmDefault,
-        'delivery_rs_per_km_first_slab': deliveryRsPerKmFirstSlabDefault,
-        'delivery_rs_per_km_beyond': deliveryRsPerKmBeyondDefault,
-        'delivery_short_trip_max_km': deliveryShortTripMaxKmDefault,
-        'delivery_short_trip_base_charge': deliveryShortTripBaseChargeDefault,
-      };
-    }
-  }
+  // static Future<bool?> setDriverWalletRecord(
+  //     Map<String, dynamic> driverWalletTransaction) async {
+  //   try {
+  //     debugPrint("transactionModel id ${driverWalletTransaction['id']}");
+  //     final response = await http.post(
+  //       Uri.parse('${Constant.baseUrl}driver/wallet/withdraw-method'),
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: json.encode(driverWalletTransaction),
+  //     );
+  //     if (response.statusCode == 200 || response.statusCode == 201) {
+  //       debugPrint("Driver wallet record added successfully");
+  //       return true;
+  //     } else {
+  //       // Handle different error status codes
+  //       debugPrint("Failed to add driver wallet record: ${response.statusCode}");
+  //       return false;
+  //     }
+  //   } catch (error) {
+  //     debugPrint("Failed to update user: $error");
+  //     return false;
+  //   }
+  // }
+  // static Future<Map<String, dynamic>> getDriverCharges({
+  //   bool forceRefresh = false,
+  // }) async {
+  //   // Fallback defaults (kept in sync with HomeController defaults)
+  //   const pickupDefault = 3.0;
+  //   const deliveryFirstSlabKmDefault = 4.0;
+  //   const deliveryRsPerKmFirstSlabDefault = 8.0;
+  //   const deliveryRsPerKmBeyondDefault = 10.0;
+  //   const deliveryShortTripMaxKmDefault = 2.0;
+  //   const deliveryShortTripBaseChargeDefault = 21.0;
+  //
+  //   double toDouble(dynamic v, double fallback) {
+  //     if (v == null) return fallback;
+  //     if (v is num) return v.toDouble();
+  //     if (v is String) return double.tryParse(v.trim()) ?? fallback;
+  //     return fallback;
+  //   }
+  //
+  //   try {
+  //     final httpClient = HttpClientService();
+  //     if (!_driverChargesCacheBustedOnce) {
+  //       _driverChargesCacheBustedOnce = true;
+  //       // Previously this endpoint was cached with a 24h TTL (settings strategy).
+  //       // Clear it once so updated backend prices reflect quickly.
+  //       try {
+  //         await httpClient.invalidateCache('driver-sql/charges');
+  //       } catch (_) {}
+  //     }
+  //     final response = await httpClient.get(
+  //       Uri.parse('${Constant.baseUrl}driver-sql/charges'),
+  //       headers: const {
+  //         'Content-Type': 'application/json',
+  //         'Accept': 'application/json',
+  //       },
+  //       // Charges should be cached, but not for 24h (backend may update).
+  //       cacheStrategy: CacheStrategy.custom,
+  //       customTTL: const Duration(hours: 1),
+  //       useCache: true,
+  //       forceRefresh: forceRefresh,
+  //       timeout: const Duration(seconds: 8),
+  //       enableRetry: true,
+  //     );
+  //
+  //     final body = response.body.trim();
+  //     if (response.statusCode != 200 || body.startsWith('<')) {
+  //       throw Exception('HTTP ${response.statusCode}');
+  //     }
+  //
+  //     final jsonResponse = json.decode(body);
+  //     if (jsonResponse is! Map<String, dynamic>) {
+  //       throw Exception('Unexpected JSON shape');
+  //     }
+  //
+  //     if (jsonResponse['success'] != true) {
+  //       throw Exception('API returned success=false');
+  //     }
+  //
+  //     final dataRaw = jsonResponse['data'];
+  //     final data =
+  //         dataRaw is Map ? Map<String, dynamic>.from(dataRaw) : <String, dynamic>{};
+  //
+  //     final pickup = toDouble(data['pickup_rs_per_km'], pickupDefault);
+  //     final firstSlabKm =
+  //         toDouble(data['delivery_first_slab_km'], deliveryFirstSlabKmDefault);
+  //     final firstSlabRate = toDouble(
+  //       data['delivery_rs_per_km_first_slab'],
+  //       deliveryRsPerKmFirstSlabDefault,
+  //     );
+  //     final beyondRate = toDouble(
+  //       data['delivery_rs_per_km_beyond'],
+  //       deliveryRsPerKmBeyondDefault,
+  //     );
+  //     final shortTripMaxKm = toDouble(
+  //       data['delivery_short_trip_max_km'],
+  //       deliveryShortTripMaxKmDefault,
+  //     );
+  //     final shortTripBaseCharge = toDouble(
+  //       data['delivery_short_trip_base_charge'],
+  //       deliveryShortTripBaseChargeDefault,
+  //     );
+  //
+  //     log(
+  //       'Driver charges loaded '
+  //       '(forceRefresh=$forceRefresh) '
+  //       'pickup=$pickup firstSlabKm=$firstSlabKm '
+  //       'firstSlabRate=$firstSlabRate beyondRate=$beyondRate '
+  //       'shortTrip≤${shortTripMaxKm}km=flat₹$shortTripBaseCharge',
+  //     );
+  //
+  //     return {
+  //       'pickup_rs_per_km': pickup,
+  //       'delivery_first_slab_km': firstSlabKm,
+  //       'delivery_rs_per_km_first_slab': firstSlabRate,
+  //       'delivery_rs_per_km_beyond': beyondRate,
+  //       'delivery_short_trip_max_km': shortTripMaxKm,
+  //       'delivery_short_trip_base_charge': shortTripBaseCharge,
+  //     };
+  //   } catch (e) {
+  //     // Don't break the app if charges fetch fails; caller will use defaults.
+  //     debugPrint('❌ Error fetching driver charges (using defaults): $e');
+  //     return {
+  //       'pickup_rs_per_km': pickupDefault,
+  //       'delivery_first_slab_km': deliveryFirstSlabKmDefault,
+  //       'delivery_rs_per_km_first_slab': deliveryRsPerKmFirstSlabDefault,
+  //       'delivery_rs_per_km_beyond': deliveryRsPerKmBeyondDefault,
+  //       'delivery_short_trip_max_km': deliveryShortTripMaxKmDefault,
+  //       'delivery_short_trip_base_charge': deliveryShortTripBaseChargeDefault,
+  //     };
+  //   }
+  // }
 
  static Future<void> getSettings({bool forceRefresh = false}) async {
     try {
@@ -2344,7 +2341,7 @@ class FireStoreUtils {
       body = body.replaceAll("{userid}", Constant.userModel!.id.toString());
       String newString = emailTemplateModel.message.toString();
       newString =
-          newString.replaceAll("{username}", Constant.userModel!.fullName());
+          newString.replaceAll("{username}", Constant.userModel!.fullName);
       newString =
           newString.replaceAll("{userid}", Constant.userModel!.id.toString());
       newString =

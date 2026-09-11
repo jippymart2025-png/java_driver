@@ -72,8 +72,8 @@ class DriverInboxScreen extends StatelessWidget {
                   ShowToastDialog.closeLoader();
 
                   Get.to(const ChatScreen(), arguments: {
-                    "customerName": '${customer!.fullName()}',
-                    "restaurantName": restaurantUser!.fullName(),
+                    "customerName": '${customer!.fullName}',
+                    "restaurantName": restaurantUser!.fullName,
                     "orderId": inboxModel.orderId,
                     "restaurantId": restaurantUser.id,
                     "customerId": customer.id,

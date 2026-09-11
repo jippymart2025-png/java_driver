@@ -860,8 +860,8 @@ class _OrderCardContent extends StatelessWidget {
           order.driverID.toString());
       ShowToastDialog.closeLoader();
       Get.to(const ChatScreen(), arguments: {
-        'customerName': customer?.fullName() ?? '',
-        'restaurantName': driver?.fullName() ?? '',
+        'customerName': customer?.fullName ?? '',
+        'restaurantName': driver?.fullName ?? '',
         'orderId': order.id,
         'restaurantId': driver?.id,
         'customerId': customer?.id,

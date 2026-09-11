@@ -296,7 +296,7 @@ class _DashboardHeader extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           child: Row(
             children: [
-              _Avatar(name: Constant.userModel?.fullName() ?? 'Driver'),
+              _Avatar(name: Constant.userModel?.fullName ?? 'Driver'),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -308,7 +308,7 @@ class _DashboardHeader extends StatelessWidget {
                             fontSize: 12,
                             color: _sub)),
                     Text(
-                      Constant.userModel?.fullName() ?? 'Driver',
+                      Constant.userModel?.fullName ?? 'Driver',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

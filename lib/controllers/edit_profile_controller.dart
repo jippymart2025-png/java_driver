@@ -1073,8 +1073,8 @@ class EditProfileController extends GetxController {
       userModel.value.profilePictureURL =
           cacheBustedUrl;
 
-      userModel.value.zoneId =
-          selectedZone.value.id;
+      // userModel.value.zoneId =
+      //     selectedZone.value.id;
 
       // ----------------------------------------------------------
       // UPDATE FIRESTORE USER
