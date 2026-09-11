@@ -423,7 +423,6 @@ import 'package:jippydriver_driver/controllers/login_controller.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
-import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/driver_location_sync.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/preferences.dart';
@@ -549,49 +548,16 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
 
   Future<void> getUser() async {
     final userId = await LoginController.getFirebaseId();
-    if (userId == null) return;
+    if (userId.isEmpty) return;
 
     try {
-      final headers = await getHeaders();
-      final res = await http
-          .get(Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$userId'), headers: headers)
-          .timeout(const Duration(seconds: 15));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-
-        Map<String, dynamic> userDetails;
-        if (data is Map<String, dynamic>) {
-          if (data.containsKey('data') && data['data'] is Map) {
-            userDetails = data['data'] as Map<String, dynamic>;
-          } else {
-            userDetails = data;
-          }
-        } else {
-          userDetails = {};
-        }
-
-        if (userDetails.isNotEmpty) {
-          if (!userDetails.containsKey('role')) {
-            userDetails['role'] = Constant.userRoleDriver;
-          }
-          if (!userDetails.containsKey('active')) {
-            userDetails['active'] = true;
-          }
-          if (!userDetails.containsKey('isActive')) {
-            userDetails['isActive'] = true;
-          }
-
-          final parsed = UserModel.fromJson(userDetails);
-          userModel.value   = parsed;
-          Constant.userModel = parsed;
-          AppLogger.log('User fetched: ${parsed.fullName()}', tag: 'Dashboard');
-        }
-      } else {
-        AppLogger.log('getUser failed: ${res.statusCode}', tag: 'Dashboard');
+      // Uses the shared getDriverDetails cache (FireStoreUtils).
+      final parsed = await FireStoreUtils.getUserProfile(userId);
+      if (parsed != null) {
+        userModel.value   = parsed;
+        Constant.userModel = parsed;
+        // AppLogger.log('User fetched: ${parsed.fullName()}', tag: 'Dashboard');
       }
-    } on TimeoutException {
-      AppLogger.log('getUser timed out', tag: 'Dashboard');
     } catch (e) {
       AppLogger.log('getUser error: $e', tag: 'Dashboard');
     }

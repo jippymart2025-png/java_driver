@@ -144,17 +144,51 @@ class LoginController extends GetxController {
 
       UserModel? userModel;
 
+      // ---------------------------------------------------------
+      // 4. Load FRESH user data
+      // ---------------------------------------------------------
+      //
+      // Always prefer the current server data (getDriverDetails) so the
+      // approval routing decision uses today's `isApproved`, NOT stale
+      // SharedPreferences data saved during an earlier session. Without this,
+      // a driver whose `isApproved` changed to false on the backend keeps
+      // landing on the Dashboard instead of the verification screen.
+      // ---------------------------------------------------------
+
       try {
-        userModel = await getUserFromSharedPreferences();
+        final fresh = await FireStoreUtils.getUserProfile(userId);
+
+        if (fresh != null && fresh.id?.isNotEmpty == true) {
+          userModel = fresh;
+          Constant.userModel = fresh;
+          await _saveUserToSharedPreferences(fresh.toJson());
+
+          log(
+            '✅ Fresh driver profile loaded from getDriverDetails: '
+                'isDocumentVerify=${fresh.isDocumentVerify}',
+          );
+        }
       } catch (e, stackTrace) {
         log(
-          'getUserFromSharedPreferences failed: $e',
+          'getUserProfile refresh failed: $e',
           stackTrace: stackTrace,
         );
       }
 
+      // Fallback: cached SharedPreferences data (offline / API failure).
+      if (userModel == null) {
+        try {
+          userModel = await getUserFromSharedPreferences();
+        } catch (e, stackTrace) {
+          log(
+            'getUserFromSharedPreferences failed: $e',
+            stackTrace: stackTrace,
+          );
+        }
+      }
+
       // ---------------------------------------------------------
-      // 4. User not found
+      // 5. User not found
       // ---------------------------------------------------------
       if (userModel == null) {
         log('❌ UserModel is null');
@@ -167,7 +201,7 @@ class LoginController extends GetxController {
       }
 
       // ---------------------------------------------------------
-      // 5. DEBUG USER DATA
+      // 6. DEBUG USER DATA
       // ---------------------------------------------------------
       log('======================================');
       log('USER DATA');
@@ -180,7 +214,7 @@ class LoginController extends GetxController {
       log('======================================');
 
       // ---------------------------------------------------------
-      // 6. Load application settings
+      // 7. Load application settings
       // ---------------------------------------------------------
       try {
         await FireStoreUtils.getSettings();
@@ -195,7 +229,7 @@ class LoginController extends GetxController {
       }
 
       // ---------------------------------------------------------
-      // 7. Check driver role
+      // 8. Check driver role
       // ---------------------------------------------------------
       if (userModel.role != Constant.userRoleDriver) {
         log(
@@ -211,7 +245,7 @@ class LoginController extends GetxController {
       }
 
       // ---------------------------------------------------------
-      // 8. Check driver enabled/active
+      // 9. Check driver enabled/active
       // ---------------------------------------------------------
       // if (!_isDriverEnabled(userModel)) {
       //   log('❌ Driver is disabled/inactive');
@@ -224,7 +258,7 @@ class LoginController extends GetxController {
       // }
 
       // ---------------------------------------------------------
-      // 9. Mandatory update check
+      // 10. Mandatory update check
       // ---------------------------------------------------------
       if (await isMandatoryUpdateRequired()) {
         log('⚠️ Mandatory update required');
@@ -237,7 +271,7 @@ class LoginController extends GetxController {
       }
 
       // ---------------------------------------------------------
-      // 10. Restore FCM token
+      // 11. Restore FCM token
       // ---------------------------------------------------------
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -254,12 +288,12 @@ class LoginController extends GetxController {
       }
 
       // ---------------------------------------------------------
-      // 11. Set global user
+      // 12. Set global user
       // ---------------------------------------------------------
       Constant.userModel = userModel;
 
       // ---------------------------------------------------------
-      // 12. APPROVAL CHECK
+      // 13. APPROVAL CHECK
       // ---------------------------------------------------------
       //
       // API:
@@ -489,6 +523,14 @@ class LoginController extends GetxController {
             }
 
             if (userDetails.isNotEmpty) {
+              // Seed the shared getDriverDetails cache so the dashboard and
+              // verification screens that load right after login reuse this
+              // data instead of calling the API again.
+              FireStoreUtils.cacheDriverDetailsData(
+                userId,
+                userDetails,
+              );
+
               // Parse using UserModel
               final UserModel userModel =
               UserModel.fromJson(userDetails);
@@ -685,7 +727,7 @@ class LoginController extends GetxController {
         prefs.setString('zoneId', _readString(userData['zoneId'])),
         prefs.setBool('isActive', _readBool(userData['isActive'])),
         prefs.setString(
-            'isApproved', userData['isDocumentVerify']?.toString() ?? ''),
+            'isApproved', userData['isApproved']?.toString() ?? ''),
         prefs.setInt('active', _readInt(userData['active'])),
         prefs.setDouble('wallet_amount', _readDouble(userData['wallet_amount'])),
         prefs.setDouble('deliveryAmount', _readDouble(userData['deliveryAmount'])),

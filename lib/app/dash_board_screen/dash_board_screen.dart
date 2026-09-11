@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:jippydriver_driver/app/edit_profile_screen/edit_profile_screen.dart';
 import 'package:jippydriver_driver/app/home_screen/home_screen.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/widgets/dashboard_bottom_nav_bar.dart';
 import 'package:jippydriver_driver/app/order_list_screen/order_list_screen.dart';
@@ -147,24 +146,29 @@ class _DashBoardScreenState extends State<DashBoardScreen> {
         _ctrl.userModel.value = forceOff;
         _ctrl.userModel.refresh();
         return;
-
-
       }
 
-      /// ✅ Prepare updated user
-      final updated = UserModel.fromJson(user.toJson());
-      // App bar toggle controls only `isActive`.
-      updated.isActive = value;
+      /// ✅ Persist via readyToAcceptIsToggle
+      final driverId = int.tryParse(user.id ?? '');
+      if (driverId == null) {
+        ShowToastDialog.showToast("Failed to update status");
+        _ctrl.userModel.refresh(); // revert visually
+        return;
+      }
 
-      updated.inProgressOrderID = user.inProgressOrderID;
-      updated.orderRequestData = user.orderRequestData;
-
-      /// Persist toggle state first so any later location-sync update uses
-      /// the latest `isActive` value and doesn't send stale false.
-      final success = await FireStoreUtils.updateUser(updated);
+      final success = await FireStoreUtils.toggleReadyToAccept(
+        driverId: driverId,
+        ready: value,
+      );
 
       if (success) {
         /// ✅ Update local state ONLY after success
+        final updated = UserModel.fromJson(user.toJson());
+        updated.isActive = value;
+
+        updated.inProgressOrderID = user.inProgressOrderID;
+        updated.orderRequestData = user.orderRequestData;
+
         _ctrl.userModel.value = updated;
         _ctrl.userModel.refresh();
         Constant.userModel = updated;

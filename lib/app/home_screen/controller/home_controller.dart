@@ -4292,39 +4292,9 @@ class HomeController extends GetxController {
   Future<void> getDriver() async {
     final userId = await LoginController.getFirebaseId();
     try {
-      final h   = HttpClientService();
-      final res = await h.get(
-        Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$userId'),
-        headers: await getHeaders(),
-        cacheStrategy: CacheStrategy.driverProfile,
-        useCache: true,
-        timeout: const Duration(seconds: 10),
-      );
-      if (res.statusCode == 200) {
-        final j = jsonDecode(res.body);
-
-        Map<String, dynamic> userDetails;
-        if (j is Map<String, dynamic>) {
-          if (j.containsKey('data') && j['data'] is Map) {
-            userDetails = j['data'] as Map<String, dynamic>;
-          } else {
-            userDetails = j;
-          }
-        } else {
-          userDetails = {};
-        }
-
-        if (userDetails.isNotEmpty) {
-          if (!userDetails.containsKey('role')) {
-            userDetails['role'] = Constant.userRoleDriver;
-          }
-          if (!userDetails.containsKey('active')) {
-            userDetails['active'] = true;
-          }
-          if (!userDetails.containsKey('isActive')) {
-            userDetails['isActive'] = true;
-          }
-
+      // Uses the shared getDriverDetails cache (FireStoreUtils), not a raw call.
+      final userDetails = await FireStoreUtils.getDriverDetailsData(userId);
+      if (userDetails.isNotEmpty) {
           final prev   = driverModel.value.orderRequestData?.toList();
           final parsed = UserModel.fromJson(userDetails);
           _filterCompletedFromUser(parsed);
@@ -4358,7 +4328,6 @@ class HomeController extends GetxController {
             await getCurrentOrder();
           }
         }
-      }
     } catch (e) {
       AppLogger.log('getDriver error: $e', tag: 'API');
     } finally {

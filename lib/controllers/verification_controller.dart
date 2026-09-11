@@ -514,34 +514,20 @@ class VerificationController extends GetxController {
   // Fetch already-uploaded document URLs from getDriverDetails
   // ---------------------------------------------------------------------------
 
-  Future<Map<String, String>> _fetchDriverDocUrls() async {
+  Future<Map<String, String>> _fetchDriverDocUrls({
+    bool forceRefresh = false,
+  }) async {
     final userId = await LoginController.getFirebaseId();
     if (userId.isEmpty) return <String, String>{};
 
     try {
-      final response = await http
-          .get(
-            Uri.parse(
-              '${Constant.baseUrl}driver/getDriverDetails?driverId=$userId',
-            ),
-            headers: await getHeaders(),
-          )
-          .timeout(_httpTimeout);
-
-      if (response.statusCode != 200) return <String, String>{};
-
-      final body = jsonDecode(response.body);
-
-      Map<String, dynamic> data;
-      if (body is Map<String, dynamic>) {
-        if (body['data'] is Map) {
-          data = Map<String, dynamic>.from(body['data'] as Map);
-        } else {
-          data = body;
-        }
-      } else {
-        data = <String, dynamic>{};
-      }
+      // Uses the shared getDriverDetails cache (FireStoreUtils), so repeated
+      // calls reuse the same data instead of re-hitting the API.
+      final data = await FireStoreUtils.getDriverDetailsData(
+        userId,
+        forceRefresh: forceRefresh,
+      );
+      if (data.isEmpty) return <String, String>{};
 
       String value(dynamic v) => v == null ? '' : v.toString().trim();
 
@@ -566,7 +552,8 @@ class VerificationController extends GetxController {
 
   Future<void> refreshAfterUpload() async {
     try {
-      final urls = await _fetchDriverDocUrls();
+      // Force a fresh fetch (post-upload), then the shared cache serves it.
+      final urls = await _fetchDriverDocUrls(forceRefresh: true);
 
       profilePicUrl.value = urls['profilePic'] ?? '';
       final approvedValue = urls['isApproved'] ?? '';
@@ -591,9 +578,10 @@ class VerificationController extends GetxController {
 
       final userId = await LoginController.getFirebaseId();
       if (userId.isNotEmpty) {
+        // No forceRefresh: reuses the data just fetched above via the shared
+        // getDriverDetails cache, so no extra API call.
         final user = await FireStoreUtils.getUserProfile(
           userId,
-          forceRefresh: true,
         );
         if (user != null) {
           Constant.userModel = user;
@@ -634,9 +622,10 @@ class VerificationController extends GetxController {
       final userId = await LoginController.getFirebaseId();
       if (userId.isEmpty) return;
 
+      // Cache-backed: only hits the network when the short TTL expires,
+      // instead of hammering getDriverDetails every poll.
       final user = await FireStoreUtils.getUserProfile(
         userId,
-        forceRefresh: true,
       );
       if (user != null) {
         Constant.userModel = user;

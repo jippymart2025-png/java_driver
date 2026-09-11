@@ -1,6 +1,3 @@
-import 'dart:convert';
-
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/send_notification.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
@@ -9,7 +6,6 @@ import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/services/audio_player_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
-import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:get/get.dart';
 
@@ -29,38 +25,11 @@ class HomeScreenMultipleOrderController extends GetxController {
   getDriver() async {
     try {
       String? userId = await LoginController.getFirebaseId();
-      final headers = await getHeaders();
 
-      final response = await http.get(
-        Uri.parse("${Constant.baseUrl}driver/getDriverDetails?driverId=$userId"),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        Map<String, dynamic> userDetails;
-        if (data is Map<String, dynamic>) {
-          if (data.containsKey('data') && data['data'] is Map) {
-            userDetails = data['data'] as Map<String, dynamic>;
-          } else {
-            userDetails = data;
-          }
-        } else {
-          userDetails = {};
-        }
+      // Uses the shared getDriverDetails cache (FireStoreUtils).
+      final userDetails = await FireStoreUtils.getDriverDetailsData(userId);
 
         if (userDetails.isNotEmpty) {
-          if (!userDetails.containsKey('role')) {
-            userDetails['role'] = Constant.userRoleDriver;
-          }
-          if (!userDetails.containsKey('active')) {
-            userDetails['active'] = true;
-          }
-          if (!userDetails.containsKey('isActive')) {
-            userDetails['isActive'] = true;
-          }
-
           driverModel.value = UserModel.fromJson(userDetails);
           Constant.userModel = driverModel.value;
           newOrder.clear();
@@ -89,7 +58,6 @@ class HomeScreenMultipleOrderController extends GetxController {
             await AudioPlayerService.playSound(true);
           }
         }
-      }
     } catch (e) {
       print("Error fetching driver: $e");
     }

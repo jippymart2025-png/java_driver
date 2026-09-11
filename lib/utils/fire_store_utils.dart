@@ -73,18 +73,37 @@ class FireStoreUtils {
   static FirebaseFirestore fireStore = FirebaseFirestore.instance;
   // Bust old (24h) charges cache once per app run after upgrade.
   static bool _driverChargesCacheBustedOnce = false;
-  static final Map<String, _ProfileCacheEntry> _profileCache = {};
-  static final Map<String, Future<UserModel?>> _profileInFlight = {};
   static const Duration _profileCacheTtl = Duration(seconds: 20);
+
+  // Raw `driver/getDriverDetails` response cache.
+  // Single source of truth shared by [getUserProfile] and every direct caller,
+  // so concurrent/repeated fetches within the TTL window use ONE network call.
+  static final Map<String, _DriverDetailsEntry> _driverDetailsCache = {};
+  static final Map<String, Future<Map<String, dynamic>>> _driverDetailsInFlight = {};
 
   static Future<String> getCurrentUid() async{
     return await LoginController.getFirebaseId();
   }
 
-  /// Drops in-memory profile cache so the next [getUserProfile] fetch sees fresh data.
+  /// Drops in-memory cache so the next [getUserProfile]/[getDriverDetailsData]
+  /// fetch sees fresh data.
   static void invalidateUserProfileCache(String uuid) {
     if (uuid.trim().isEmpty) return;
-    _profileCache.remove(uuid);
+    _driverDetailsCache.remove(uuid);
+  }
+
+  /// Seeds the In-memory driver-details cache from data already fetched by the
+  /// caller (e.g. the `getDriverDetails` response parsed during login), so the
+  /// screens that follow reuse it instead of re-hitting the API.
+  static void cacheDriverDetailsData(
+    String uuid,
+    Map<String, dynamic> data,
+  ) {
+    if (uuid.trim().isEmpty || data.isEmpty) return;
+    _driverDetailsCache[uuid] = _DriverDetailsEntry(
+      data: data,
+      cachedAt: DateTime.now(),
+    );
   }
   // static Future<bool> isLogin() async {
   //   bool isLogin = false;
@@ -126,25 +145,27 @@ class FireStoreUtils {
   //     return false;
   //   }
   // }
-  static Future<UserModel?> getUserProfile(
-      String uuid, {
-        bool forceRefresh = false,
-      }) async {
-    if (uuid.trim().isEmpty) {
-      return null;
+  /// Fetches `driver/getDriverDetails` once and returns the raw `data` map
+  /// (with `driverId -> id` and role/active/isActive defaults applied), serving
+  /// it from a short-lived in-memory cache afterwards.
+  ///
+  /// Concurrency-safe: simultaneous callers share the same in-flight future,
+  /// and the underlying [HttpClientService] caches/dedupes by URL too.
+  static Future<Map<String, dynamic>> getDriverDetailsData(
+    String uuid, {
+    bool forceRefresh = false,
+  }) async {
+    if (uuid.trim().isEmpty) return const {};
+
+    final cached = _driverDetailsCache[uuid];
+    if (!forceRefresh && cached != null && !cached.isExpired) {
+      return Map<String, dynamic>.from(cached.data);
     }
 
-    final cached = _profileCache[uuid];
-
-    if (!forceRefresh &&
-        cached != null &&
-        !cached.isExpired) {
-      return cached.user;
-    }
-
-    if (!forceRefresh &&
-        _profileInFlight.containsKey(uuid)) {
-      return _profileInFlight[uuid];
+    final inFlight = _driverDetailsInFlight[uuid];
+    if (!forceRefresh && inFlight != null) {
+      final result = await inFlight;
+      return Map<String, dynamic>.from(result);
     }
 
     final future = () async {
@@ -161,14 +182,6 @@ class FireStoreUtils {
           useCache: !forceRefresh,
           forceRefresh: forceRefresh,
           timeout: const Duration(seconds: 10),
-        );
-
-        debugPrint(
-          "getDriverDetails status: ${response.statusCode}",
-        );
-
-        debugPrint(
-          "getDriverDetails response: ${response.body}",
         );
 
         if (response.statusCode == 200) {
@@ -202,22 +215,6 @@ class FireStoreUtils {
             }
 
             // ----------------------------------------------------
-            // PROFILE IMAGE
-            // API:
-            // profilePicUrl
-            //
-            // MODEL:
-            // profilePictureURL
-            // ----------------------------------------------------
-
-            if (userDetails.containsKey(
-              'profilePicUrl',
-            )) {
-              userDetails['profilePictureURL'] =
-              userDetails['profilePicUrl'];
-            }
-
-            // ----------------------------------------------------
             // DEFAULT VALUES
             // ----------------------------------------------------
 
@@ -233,62 +230,69 @@ class FireStoreUtils {
               userDetails['isActive'] = true;
             }
 
-            debugPrint(
-              "Mapped profilePictureURL: "
-                  "${userDetails['profilePictureURL']}",
-            );
-
-            // ----------------------------------------------------
-            // CREATE USER MODEL
-            // ----------------------------------------------------
-
-            final user =
-            UserModel.fromJson(userDetails);
-
-            debugPrint(
-              "UserModel profilePictureURL: "
-                  "${user.profilePictureURL}",
-            );
-
-            // ----------------------------------------------------
-            // CACHE
-            // ----------------------------------------------------
-
-            _profileCache[uuid] =
-                _ProfileCacheEntry(
-                  user: user,
-                  cachedAt: DateTime.now(),
-                );
-
-            return user;
+            return userDetails;
           }
         }
-
-        if (response.statusCode != 404) {
-          log(
-            "Failed to get user profile: "
-                "${response.statusCode} - "
-                "${response.body}",
-          );
-        }
-      } on TimeoutException catch (e) {
-        log(
-          "getUserProfile timeout: $e",
-        );
       } catch (e) {
-        log(
-          "getUserProfile error: $e",
-        );
-      } finally {
-        _profileInFlight.remove(uuid);
+        log('getDriverDetailsData error: $e');
       }
 
-      return null;
+      return const <String, dynamic>{};
     }();
 
-    _profileInFlight[uuid] = future;
+    _driverDetailsInFlight[uuid] = future;
 
-    return future;
+    try {
+      final result = await future;
+      if (result.isNotEmpty) {
+        _driverDetailsCache[uuid] = _DriverDetailsEntry(
+          data: result,
+          cachedAt: DateTime.now(),
+        );
+      }
+      // Return a defensive copy; callers may tag/remove keys freely
+      // without corrupting the shared cache entry.
+      return Map<String, dynamic>.from(result);
+    } finally {
+      _driverDetailsInFlight.remove(uuid);
+    }
+  }
+
+  static Future<UserModel?> getUserProfile(
+      String uuid, {
+        bool forceRefresh = false,
+      }) async {
+    if (uuid.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final userDetails = await getDriverDetailsData(
+        uuid,
+        forceRefresh: forceRefresh,
+      );
+
+      if (userDetails.isEmpty) {
+        return null;
+      }
+
+      // ----------------------------------------------------
+      // PROFILE IMAGE
+      // API: profilePicUrl  ->  MODEL: profilePictureURL
+      // ----------------------------------------------------
+
+      final picUrl = userDetails['profilePicUrl'];
+      if (picUrl != null) {
+        userDetails['profilePictureURL'] = picUrl;
+      }
+
+      final user = UserModel.fromJson(userDetails);
+
+      return user;
+    } catch (e) {
+      log('getUserProfile error: $e');
+      return null;
+    }
   }
   static Future<bool?> updateUserWalletHomeScreen({
     required String amount,
@@ -396,6 +400,42 @@ class FireStoreUtils {
       }
     } catch (error) {
       log("Failed to update user: $error");
+      return false;
+    }
+  }
+
+  /// Toggles the driver's ready-to-accept-orders (availability) flag via
+  /// `PUT driver/readyToAcceptIsToggle`.
+  static Future<bool> toggleReadyToAccept({
+    required int driverId,
+    required bool ready,
+  }) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${Constant.baseUrl}driver/readyToAcceptIsToggle'),
+        headers: {
+          'accept': '*/*',
+          ...await getHeaders(),
+        },
+        body: json.encode({
+          'driverId': driverId,
+          'readyToAcceptOrders': ready,
+        }),
+      );
+
+      log(
+        'readyToAcceptIsToggle response [${response.statusCode}]: '
+        '${response.body}',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return true;
+      }
+
+      log('readyToAcceptIsToggle failed: ${response.body}');
+      return false;
+    } catch (error) {
+      log('readyToAcceptIsToggle error: $error');
       return false;
     }
   }
@@ -2482,12 +2522,12 @@ class FireStoreUtils {
     }
   }
 
-  class _ProfileCacheEntry {
-    final UserModel user;
+  class _DriverDetailsEntry {
+    final Map<String, dynamic> data;
     final DateTime cachedAt;
 
-    const _ProfileCacheEntry({
-      required this.user,
+    const _DriverDetailsEntry({
+      required this.data,
       required this.cachedAt,
     });
 

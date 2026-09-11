@@ -19,6 +19,7 @@ import '../models/state_model.dart';
 import 'package:jippydriver_driver/models/city_model.dart';
 import 'package:jippydriver_driver/models/area_model.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/dash_board_screen.dart';
+import 'package:jippydriver_driver/app/verification_screen/verification_screen.dart';
 /// OPTIMIZATIONS:
 /// 1. validateAndSignup() — all validation lives in the controller, not the view.
 /// 2. signUpWithEmailAndPassword: unified null-safety with ?. and ?? operators.
@@ -726,7 +727,16 @@ final selectedState = Rxn<StateModel>();
           'Thank you for signing up. Your application is under review — we\'ll notify you once it\'s approved.'
               .tr);
     }
-    // Get.offAll(const LoginScreen());
-    Get.offAll(() => const DashBoardScreen());
+    // Route approved drivers to the dashboard; unapproved drivers must complete
+    // document verification first.
+    if (Constant.userModel?.isDocumentVerify == true) {
+      Get.offAll(
+            () => const DashBoardScreen(),
+      );
+    } else {
+      Get.offAll(
+            () => const VerificationScreen(),
+      );
+    }
   }
 }
