@@ -14,6 +14,8 @@ import 'package:jippydriver_driver/themes/text_field_widget.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/LoginWithPhoneButton.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -308,57 +310,6 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Secondary button — Log in with Mobile Number
-// ─────────────────────────────────────────────────────────────────────────────
-class LoginWithPhoneButton extends StatelessWidget {
-  const LoginWithPhoneButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Provider.of<DarkThemeProvider>(context).getThem();
-
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          Get.to(
-                () => const PhoneNumberScreen(),
-            transition: Transition.rightToLeftWithFade,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-          );
-        },
-        icon: Icon(
-          Icons.phone_iphone_rounded,
-          size: 20,
-          color: isDark ? AppThemeData.grey100 : AppThemeData.grey800,
-        ),
-        label: Text(
-          'Log in with Mobile Number'.tr,
-          style: TextStyle(
-            fontSize: 15,
-            fontFamily: AppThemeData.semiBold,
-            color: isDark ? AppThemeData.grey100 : AppThemeData.grey800,
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
-          backgroundColor:
-          isDark ? AppThemeData.grey900 : AppThemeData.grey50,
-          side: BorderSide(
-            color: isDark ? AppThemeData.grey800 : AppThemeData.grey200,
-            width: 1.2,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Primary button with press-scale + optional loading
