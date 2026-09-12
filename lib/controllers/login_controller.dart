@@ -31,7 +31,7 @@ import '../utils/common.dart';
 
 /// OPTIMIZATIONS:
 /// 1. Added validateAndLogin() — separates UI validation from business logic.
-/// 2. _saveUserToSharedPreferences uses a single prefs instance and batches
+/// 2. saveUserToSharedPreferences uses a single prefs instance and batches
 ///    Future.wait where possible for parallel writes.
 /// 3. Removed dead commented-out code (Firebase Auth methods) — kept in
 ///    version control if needed.
@@ -161,7 +161,7 @@ class LoginController extends GetxController {
         if (fresh != null && fresh.id?.isNotEmpty == true) {
           userModel = fresh;
           Constant.userModel = fresh;
-          await _saveUserToSharedPreferences(fresh.toJson());
+          await saveUserToSharedPreferences(fresh.toJson());
 
           log(
             '✅ Fresh driver profile loaded from getDriverDetails: '
@@ -542,7 +542,7 @@ class LoginController extends GetxController {
               userModel.role ??= Constant.userRoleDriver;
 
               // Save model data
-              await _saveUserToSharedPreferences(
+              await saveUserToSharedPreferences(
                 userModel.toJson(),
               );
 
@@ -606,7 +606,7 @@ class LoginController extends GetxController {
           return;
         }
 
-        await _saveUserToSharedPreferences(userData);
+        await saveUserToSharedPreferences(userData);
 
         try {
           userModel.fcmToken =
@@ -667,7 +667,7 @@ class LoginController extends GetxController {
   }
   // ── SharedPreferences helpers ──────────────────────────────────────────────
 
-  Future<void> _saveUserToSharedPreferences(
+  Future<void> saveUserToSharedPreferences(
       Map<String, dynamic> userData) async {
     try {
       final prefs = await SharedPreferences.getInstance();

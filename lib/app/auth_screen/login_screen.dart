@@ -1,13 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:jippydriver_driver/app/auth_screen/phone_number_screen.dart';
 import 'package:jippydriver_driver/app/auth_screen/signup_screen.dart';
 import 'package:jippydriver_driver/app/forgot_password_screen/forgot_password_screen.dart';
-import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/controllers/login_controller.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
-import 'package:jippydriver_driver/themes/responsive.dart';
-import 'package:jippydriver_driver/themes/round_button_fill.dart';
 import 'package:jippydriver_driver/themes/text_field_widget.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:flutter/gestures.dart';
@@ -242,6 +240,12 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 18),
+
+                  // ── Mobile number login ────────────────────────────────
+                  const LoginWithPhoneButton(),
+
                   const SizedBox(height: 40),
                 ],
               ),
@@ -274,6 +278,75 @@ class _LoginButton extends StatelessWidget {
         child: _PrimaryButton(
           label: 'Log in'.tr,
           onTap: () => controller.validateAndLogin(),
+        ),
+      ),
+    );
+  }
+}
+
+class LoginWithPhoneButton extends StatelessWidget {
+  const LoginWithPhoneButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              colors: [AppThemeData.secondary300, AppThemeData.secondary400],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppThemeData.secondary300.withOpacity(0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Get.to(
+                      () => const PhoneNumberScreen(),
+                  transition: Transition.rightToLeftWithFade,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              },
+              child: const Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.phone_iphone_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Log in with Mobile Number',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontFamily: AppThemeData.semiBold,
+                        color: Colors.white,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
