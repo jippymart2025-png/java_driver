@@ -8,7 +8,7 @@ import 'dart:developer';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import 'package:jippydriver_driver/app/auth_screen/login_screen.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/login_screen.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/dash_board_screen.dart';
 import 'package:jippydriver_driver/app/mandatory_update_screen.dart';
 import 'package:jippydriver_driver/app/on_boarding_screen.dart';
@@ -27,7 +27,7 @@ import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../utils/common.dart';
+import '../../../utils/common.dart';
 
 /// OPTIMIZATIONS:
 /// 1. Added validateAndLogin() — separates UI validation from business logic.

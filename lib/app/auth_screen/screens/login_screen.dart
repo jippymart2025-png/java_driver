@@ -1,28 +1,18 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:jippydriver_driver/app/auth_screen/phone_number_screen.dart';
-import 'package:jippydriver_driver/app/auth_screen/signup_screen.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:get/get.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/phone_number_screen.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/signup_screen.dart';
 import 'package:jippydriver_driver/app/forgot_password_screen/forgot_password_screen.dart';
-import 'package:jippydriver_driver/controllers/login_controller.dart';
+import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/text_field_widget.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-
-/// OPTIMIZATIONS:
-/// 1. Replaced multiple TweenAnimationBuilders with a single AnimationController
-///    via _AuthAnimations mixin — fewer rebuild calls, better perf.
-/// 2. Extracted _LoginForm as a private StatelessWidget — GetX only rebuilds
-///    the reactive parts (password toggle), not the whole scaffold.
-/// 3. Removed duplicate dark_theme_provider import.
-/// 4. Login button is now a proper AnimatedButton widget with press feedback.
-/// 5. Validation logic extracted to LoginController (see login_controller.dart).
-/// 6. Used const constructors everywhere possible.
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,9 +27,9 @@ class _LoginScreenState extends State<LoginScreen>
   late final List<Animation<double>> _fadeAnims;
   late final List<Animation<Offset>> _slideAnims;
 
-  static const _itemCount = 5; // title, subtitle, link, email, password
-  static const _duration = Duration(milliseconds: 600);
-  static const _stagger = 80; // ms between each item
+  static const _itemCount = 6; // title, subtitle, link, email, password, forgot
+  static const _duration = Duration(milliseconds: 500);
+  static const _stagger = 70;
 
   @override
   void initState() {
@@ -47,22 +37,23 @@ class _LoginScreenState extends State<LoginScreen>
     _animController = AnimationController(
       vsync: this,
       duration: Duration(
-          milliseconds: _duration.inMilliseconds + _stagger * (_itemCount - 1)),
+          milliseconds:
+          _duration.inMilliseconds + _stagger * (_itemCount - 1)),
     );
 
     _fadeAnims = List.generate(_itemCount, (i) {
-      final start = (_stagger * i) / _animController.duration!.inMilliseconds;
-      final end = ((_stagger * i) + _duration.inMilliseconds) /
-          _animController.duration!.inMilliseconds;
+      final total = _animController.duration!.inMilliseconds;
+      final start = (_stagger * i) / total;
+      final end = ((_stagger * i) + _duration.inMilliseconds) / total;
       return CurvedAnimation(
         parent: _animController,
-        curve: Interval(start, end.clamp(0.0, 1.0), curve: Curves.easeOut),
+        curve: Interval(start, end.clamp(0.0, 1.0), curve: Curves.easeOutCubic),
       );
     });
 
     _slideAnims = _fadeAnims
         .map((anim) => Tween<Offset>(
-      begin: const Offset(0, 0.15),
+      begin: const Offset(0, 0.12),
       end: Offset.zero,
     ).animate(anim))
         .toList();
@@ -96,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen>
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -107,37 +98,35 @@ class _LoginScreenState extends State<LoginScreen>
                     fade: _fadeAnims[0],
                     slide: _slideAnims[0],
                     child: Text(
-                      'Log In to Your Account'.tr,
+                      'Welcome back 👋'.tr,
                       style: TextStyle(
-                        color: isDark
-                            ? AppThemeData.grey50
-                            : AppThemeData.grey900,
-                        fontSize: 24,
-                        fontFamily: AppThemeData.semiBold,
+                        color:
+                        isDark ? AppThemeData.grey50 : AppThemeData.grey900,
+                        fontSize: 28,
+                        fontFamily: AppThemeData.bold,
                         height: 1.2,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 9),
+                  const SizedBox(height: 8),
 
                   // ── Subtitle ───────────────────────────────────────────
                   _Animated(
                     fade: _fadeAnims[1],
                     slide: _slideAnims[1],
                     child: Text(
-                      'Sign in to access your JippyMart account and manage your deliveries seamlessly.'
-                          .tr,
+                      'Sign in to continue managing your deliveries'.tr,
                       style: TextStyle(
-                        color: isDark
-                            ? AppThemeData.grey400
-                            : AppThemeData.grey500,
+                        color:
+                        isDark ? AppThemeData.grey400 : AppThemeData.grey600,
                         fontSize: 14,
                         fontFamily: AppThemeData.regular,
                         height: 1.5,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 28),
 
                   // ── Sign-up link ───────────────────────────────────────
                   _Animated(
@@ -146,35 +135,37 @@ class _LoginScreenState extends State<LoginScreen>
                     child: Text.rich(
                       TextSpan(children: [
                         TextSpan(
-                          text: "Didn't have an account? ".tr,
+                          text: "Don't have an account? ".tr,
                           style: TextStyle(
                             color: isDark
                                 ? AppThemeData.grey300
                                 : AppThemeData.grey700,
-                            fontFamily: AppThemeData.medium,
+                            fontFamily: AppThemeData.regular,
                             fontSize: 14,
                           ),
                         ),
                         TextSpan(
                           recognizer: TapGestureRecognizer()
-                            ..onTap = () => Get.to(
-                                  () => const SignupScreen(),
-                              transition: Transition.rightToLeft,
-                              duration: const Duration(milliseconds: 280),
-                            ),
+                            ..onTap = () {
+                              HapticFeedback.lightImpact();
+                              Get.to(
+                                    () => const SignupScreen(),
+                                transition: Transition.rightToLeftWithFade,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutCubic,
+                              );
+                            },
                           text: 'Sign up'.tr,
                           style: const TextStyle(
                             color: AppThemeData.secondary300,
                             fontFamily: AppThemeData.semiBold,
                             fontSize: 14,
-                            decoration: TextDecoration.underline,
-                            decorationColor: AppThemeData.secondary300,
                           ),
                         ),
                       ]),
                     ),
                   ),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 28),
 
                   // ── Email field ────────────────────────────────────────
                   _Animated(
@@ -183,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen>
                     child: TextFieldWidget(
                       title: 'Email Address'.tr,
                       controller: controller.emailEditingController.value,
-                      hintText: 'Enter email address'.tr,
+                      hintText: 'you@example.com'.tr,
                       textInputType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       prefix: _FieldIcon(
@@ -192,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
                   // ── Password field ─────────────────────────────────────
                   _Animated(
@@ -202,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen>
                       title: 'Password'.tr,
                       controller:
                       controller.passwordEditingController.value,
-                      hintText: 'Enter password'.tr,
+                      hintText: 'Enter your password'.tr,
                       obscureText: controller.passwordVisible.value,
                       textInputAction: TextInputAction.done,
                       prefix: _FieldIcon(
@@ -212,46 +203,105 @@ class _LoginScreenState extends State<LoginScreen>
                       suffix: _PasswordToggle(
                         visible: controller.passwordVisible.value,
                         isDark: isDark,
-                        onTap: () => controller.passwordVisible.value =
-                        !controller.passwordVisible.value,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          controller.passwordVisible.value =
+                          !controller.passwordVisible.value;
+                        },
                       ),
                     )),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
                   // ── Forgot password ────────────────────────────────────
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () => Get.to(
-                            () => const ForgotPasswordScreen(),
-                        transition: Transition.rightToLeft,
-                        duration: const Duration(milliseconds: 280),
-                      ),
-                      child: Text(
-                        'Forgot Password?'.tr,
-                        style: const TextStyle(
-                          color: AppThemeData.secondary300,
-                          fontSize: 13,
-                          fontFamily: AppThemeData.medium,
-                          decoration: TextDecoration.underline,
-                          decorationColor: AppThemeData.secondary300,
+                  _Animated(
+                    fade: _fadeAnims[5],
+                    slide: _slideAnims[5],
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          Get.to(
+                                () => const ForgotPasswordScreen(),
+                            transition: Transition.rightToLeftWithFade,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Forgot Password?'.tr,
+                          style: const TextStyle(
+                            color: AppThemeData.secondary300,
+                            fontSize: 13,
+                            fontFamily: AppThemeData.semiBold,
+                          ),
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 24),
 
-                  // ── Mobile number login ────────────────────────────────
+                  // ── Primary: Log in ────────────────────────────────────
+                  _PrimaryButton(
+                    label: 'Log in'.tr,
+                    onTap: () => controller.validateAndLogin(),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ── Divider with "or" ──────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Divider(
+                          color: isDark
+                              ? AppThemeData.grey800
+                              : AppThemeData.grey200,
+                          thickness: 1,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'or'.tr,
+                          style: TextStyle(
+                            color: isDark
+                                ? AppThemeData.grey500
+                                : AppThemeData.grey500,
+                            fontSize: 12,
+                            fontFamily: AppThemeData.medium,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Divider(
+                          color: isDark
+                              ? AppThemeData.grey800
+                              : AppThemeData.grey200,
+                          thickness: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ── Secondary: Phone login ─────────────────────────────
                   const LoginWithPhoneButton(),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
           ),
-          bottomNavigationBar: _LoginButton(controller: controller),
         );
       },
     );
@@ -259,93 +309,50 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Login CTA button — lives outside scroll, always visible
+// Secondary button — Log in with Mobile Number
 // ─────────────────────────────────────────────────────────────────────────────
-class _LoginButton extends StatelessWidget {
-  const _LoginButton({required this.controller});
-  final LoginController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          8,
-          20,
-          Platform.isIOS ? 12 : 16,
-        ),
-        child: _PrimaryButton(
-          label: 'Log in'.tr,
-          onTap: () => controller.validateAndLogin(),
-        ),
-      ),
-    );
-  }
-}
-
 class LoginWithPhoneButton extends StatelessWidget {
   const LoginWithPhoneButton({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: SizedBox(
-        width: double.infinity,
-        height: 56,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            gradient: const LinearGradient(
-              colors: [AppThemeData.secondary300, AppThemeData.secondary400],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppThemeData.secondary300.withOpacity(0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
+    final isDark = Provider.of<DarkThemeProvider>(context).getThem();
+
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          Get.to(
+                () => const PhoneNumberScreen(),
+            transition: Transition.rightToLeftWithFade,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          );
+        },
+        icon: Icon(
+          Icons.phone_iphone_rounded,
+          size: 20,
+          color: isDark ? AppThemeData.grey100 : AppThemeData.grey800,
+        ),
+        label: Text(
+          'Log in with Mobile Number'.tr,
+          style: TextStyle(
+            fontSize: 15,
+            fontFamily: AppThemeData.semiBold,
+            color: isDark ? AppThemeData.grey100 : AppThemeData.grey800,
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Get.to(
-                      () => const PhoneNumberScreen(),
-                  transition: Transition.rightToLeftWithFade,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                );
-              },
-              child: const Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.phone_iphone_rounded,
-                      size: 20,
-                      color: Colors.white,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Log in with Mobile Number',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontFamily: AppThemeData.semiBold,
-                        color: Colors.white,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor:
+          isDark ? AppThemeData.grey900 : AppThemeData.grey50,
+          side: BorderSide(
+            color: isDark ? AppThemeData.grey800 : AppThemeData.grey200,
+            width: 1.2,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
       ),
@@ -354,12 +361,18 @@ class LoginWithPhoneButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable primary button with press-scale feedback
+// Primary button with press-scale + optional loading
 // ─────────────────────────────────────────────────────────────────────────────
 class _PrimaryButton extends StatefulWidget {
-  const _PrimaryButton({required this.label, required this.onTap});
+  const _PrimaryButton({
+    required this.label,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
   final String label;
   final VoidCallback onTap;
+  final bool isLoading;
 
   @override
   State<_PrimaryButton> createState() => _PrimaryButtonState();
@@ -374,7 +387,9 @@ class _PrimaryButtonState extends State<_PrimaryButton>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 100));
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
     _scale = Tween<double>(begin: 1.0, end: 0.97).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
     );
@@ -389,9 +404,12 @@ class _PrimaryButtonState extends State<_PrimaryButton>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _ctrl.forward(),
-      onTapUp: (_) {
+      onTapDown: widget.isLoading ? null : (_) => _ctrl.forward(),
+      onTapUp: widget.isLoading
+          ? null
+          : (_) {
         _ctrl.reverse();
+        HapticFeedback.mediumImpact();
         widget.onTap();
       },
       onTapCancel: () => _ctrl.reverse(),
@@ -399,13 +417,29 @@ class _PrimaryButtonState extends State<_PrimaryButton>
         scale: _scale,
         child: Container(
           width: double.infinity,
-          height: 52,
+          height: 54,
           decoration: BoxDecoration(
             color: AppThemeData.driverApp300,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppThemeData.driverApp300.withOpacity(0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           alignment: Alignment.center,
-          child: Text(
+          child: widget.isLoading
+              ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation(AppThemeData.grey50),
+            ),
+          )
+              : Text(
             widget.label,
             style: const TextStyle(
               color: AppThemeData.grey50,
@@ -421,7 +455,7 @@ class _PrimaryButtonState extends State<_PrimaryButton>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Composable animated wrapper — single source of truth for fade+slide
+// Composable animated wrapper — single source of truth for fade + slide
 // ─────────────────────────────────────────────────────────────────────────────
 class _Animated extends StatelessWidget {
   const _Animated({
@@ -429,6 +463,7 @@ class _Animated extends StatelessWidget {
     required this.slide,
     required this.child,
   });
+
   final Animation<double> fade;
   final Animation<Offset> slide;
   final Widget child;
@@ -443,10 +478,11 @@ class _Animated extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared field icon — avoids repeating Padding+SvgPicture+ColorFilter
+// Shared field icon
 // ─────────────────────────────────────────────────────────────────────────────
 class _FieldIcon extends StatelessWidget {
   const _FieldIcon({required this.asset, required this.isDark});
+
   final String asset;
   final bool isDark;
 
@@ -456,8 +492,10 @@ class _FieldIcon extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: SvgPicture.asset(
         asset,
+        width: 20,
+        height: 20,
         colorFilter: ColorFilter.mode(
-          isDark ? AppThemeData.grey300 : AppThemeData.grey600,
+          isDark ? AppThemeData.grey400 : AppThemeData.grey500,
           BlendMode.srcIn,
         ),
       ),
@@ -474,14 +512,16 @@ class _PasswordToggle extends StatelessWidget {
     required this.isDark,
     required this.onTap,
   });
+
   final bool visible;
   final bool isDark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: AnimatedSwitcher(
@@ -491,8 +531,10 @@ class _PasswordToggle extends StatelessWidget {
                 ? 'assets/icons/ic_password_show.svg'
                 : 'assets/icons/ic_password_close.svg',
             key: ValueKey(visible),
+            width: 20,
+            height: 20,
             colorFilter: ColorFilter.mode(
-              isDark ? AppThemeData.grey300 : AppThemeData.grey600,
+              isDark ? AppThemeData.grey400 : AppThemeData.grey500,
               BlendMode.srcIn,
             ),
           ),

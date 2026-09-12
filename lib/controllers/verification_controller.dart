@@ -325,7 +325,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/dash_board_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
-import 'package:jippydriver_driver/controllers/login_controller.dart';
+import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
 import 'package:jippydriver_driver/models/document_model.dart';
 import 'package:jippydriver_driver/models/driver_document_model.dart';
 import 'package:jippydriver_driver/utils/common.dart';

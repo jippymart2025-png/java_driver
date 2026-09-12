@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:jippydriver_driver/app/auth_screen/otp_screen.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/otp_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';

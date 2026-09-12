@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:jippydriver_driver/app/wallet_screen/screens/model/delivery_amount_model.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
-import 'package:jippydriver_driver/controllers/login_controller.dart';
+import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/models/withdraw_method_model.dart';
 import 'package:jippydriver_driver/models/withdrawal_model.dart';

@@ -16,7 +16,7 @@ import 'package:jippydriver_driver/themes/round_button_fill.dart';
 import 'package:jippydriver_driver/themes/text_field_widget.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
-import 'package:jippydriver_driver/controllers/login_controller.dart';
+import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
 import 'package:jippydriver_driver/widget/my_separator.dart';
 
 class WalletScreen extends StatelessWidget {

@@ -8,14 +8,14 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../constant/constant.dart';
 import '../../constant/show_toast_dialog 2.dart';
-import '../../controllers/login_controller.dart';
+import '../auth_screen/controller/login_controller.dart';
 import '../../services/audio_player_service.dart';
 import '../../themes/app_them_data.dart';
 import '../../themes/custom_dialog_box.dart';
 import '../../utils/dark_theme_provider.dart';
 import '../../utils/fire_store_utils.dart';
 import '../../utils/network_image_widget.dart';
-import '../auth_screen/login_screen.dart';
+import '../auth_screen/screens/login_screen.dart';
 import '../verification_screen/verification_screen.dart';
 import 'profile_controller.dart';
 

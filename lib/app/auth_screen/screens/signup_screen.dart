@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:country_code_picker/country_code_picker.dart';
-import 'package:jippydriver_driver/app/auth_screen/login_screen.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/login_screen.dart';
 //import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
-import 'package:jippydriver_driver/controllers/signup_controller.dart';
+import 'package:jippydriver_driver/app/auth_screen/controller/signup_controller.dart';
 //import 'package:jippydriver_driver/models/zone_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 //import 'package:jippydriver_driver/themes/responsive.dart';
@@ -19,7 +19,7 @@ import 'package:jippydriver_driver/models/state_model.dart';
 import 'package:jippydriver_driver/models/city_model.dart';
 import 'package:jippydriver_driver/models/area_model.dart';
 
-import '../SelectLocationScreen/SelectLocationScreen.dart';
+import '../../SelectLocationScreen/SelectLocationScreen.dart';
 
 /// OPTIMIZATIONS:
 /// 1. Single AnimationController replaces 11 separate TweenAnimationBuilders.

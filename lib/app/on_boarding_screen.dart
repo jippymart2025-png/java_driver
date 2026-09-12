@@ -1,5 +1,5 @@
 import 'dart:developer';
-import 'package:jippydriver_driver/app/auth_screen/login_screen.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/login_screen.dart';
 import 'package:jippydriver_driver/controllers/on_boarding_controller.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/responsive.dart';

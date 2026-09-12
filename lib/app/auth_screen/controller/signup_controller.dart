@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
-import 'package:jippydriver_driver/app/auth_screen/login_screen.dart';
+import 'package:jippydriver_driver/app/auth_screen/screens/login_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
@@ -15,7 +15,7 @@ import 'package:jippydriver_driver/utils/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'dart:async';
-import '../models/state_model.dart';
+import '../../../models/state_model.dart';
 import 'package:jippydriver_driver/models/city_model.dart';
 import 'package:jippydriver_driver/models/area_model.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/dash_board_screen.dart';
