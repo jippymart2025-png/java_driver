@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/currency_model.dart';
 import 'package:jippydriver_driver/models/language_model.dart';
-import 'package:jippydriver_driver/models/mail_setting.dart';
 import 'package:jippydriver_driver/models/tax_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/models/zone_model.dart' hide LatLng;
@@ -80,7 +79,7 @@ class Constant {
   static CurrencyModel? currencyModel;
   static List<TaxModel>? taxList = [];
 
-  static MailSettings? mailSettings;
+  // static MailSettings? mailSettings;
   static String walletTopup = "wallet_topup";
   static String newVendorSignup = "new_vendor_signup";
   static String payoutRequestStatus = "payout_request_status";
@@ -438,47 +437,6 @@ class Constant {
     return (crossings % 2 != 0);
   }
 
-  static final smtpServer = SmtpServer(mailSettings!.host.toString(),
-      username: mailSettings!.userName.toString(),
-      password: mailSettings!.password.toString(),
-      port: 465,
-      ignoreBadCertificate: false,
-      ssl: true,
-      allowInsecure: true);
-
-  static sendMail(
-      {String? subject,
-      String? body,
-      bool? isAdmin = false,
-      List<dynamic>? recipients}) async {
-    // Create our message.
-    if (isAdmin == true) {
-      recipients!.add(mailSettings!.userName.toString());
-    }
-    final message = Message()
-      ..from = Address(
-          mailSettings!.userName.toString(), mailSettings!.fromName.toString())
-      ..recipients = recipients!
-      ..subject = subject
-      ..text = body
-      ..html = body;
-
-    try {
-      final sendReport = await send(message, smtpServer);
-      debugPrint('Message sent: $sendReport');
-    } on MailerException catch (e) {
-      print(e);
-      debugPrint('Message not sent.');
-      for (var p in e.problems) {
-        debugPrint('Problem: ${p.code}: ${p.msg}');
-      }
-    }
-
-    // var connection = PersistentConnection(smtpServer);
-    //
-    // // Send the first message
-    // await connection.send(message);
-  }
 
   static Uri createCoordinatesUrl(double latitude, double longitude,
       [String? label]) {

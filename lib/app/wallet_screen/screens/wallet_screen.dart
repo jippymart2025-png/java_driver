@@ -915,10 +915,10 @@ class _WithdrawalSheet extends StatelessWidget {
 
     Get.back();
 
-    FireStoreUtils.sendPayoutMail(
-      amount: rawAmount,
-      payoutrequestid: withdrawHistory.id.toString(),
-    );
+    // FireStoreUtils.sendPayoutMail(
+    //   amount: rawAmount,
+    //   payoutrequestid: withdrawHistory.id.toString(),
+    // );
 
     // Refresh transaction list in background
     controller.refresh();

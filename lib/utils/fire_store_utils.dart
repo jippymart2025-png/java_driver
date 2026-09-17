@@ -14,25 +14,10 @@ import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.d
 import 'package:jippydriver_driver/models/conversation_model.dart';
 import 'package:jippydriver_driver/models/document_model.dart';
 import 'package:jippydriver_driver/models/driver_document_model.dart';
-import 'package:jippydriver_driver/models/email_template_model.dart';
 import 'package:jippydriver_driver/models/inbox_model.dart';
-import 'package:jippydriver_driver/models/mail_setting.dart';
 import 'package:jippydriver_driver/models/notification_model.dart';
 import 'package:jippydriver_driver/models/on_boarding_model.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
-import 'package:jippydriver_driver/models/payment_model/cod_setting_model.dart';
-import 'package:jippydriver_driver/models/payment_model/flutter_wave_model.dart';
-import 'package:jippydriver_driver/models/payment_model/mercado_pago_model.dart';
-import 'package:jippydriver_driver/models/payment_model/mid_trans.dart';
-import 'package:jippydriver_driver/models/payment_model/orange_money.dart';
-import 'package:jippydriver_driver/models/payment_model/pay_fast_model.dart';
-import 'package:jippydriver_driver/models/payment_model/pay_stack_model.dart';
-import 'package:jippydriver_driver/models/payment_model/paypal_model.dart';
-import 'package:jippydriver_driver/models/payment_model/paytm_model.dart';
-import 'package:jippydriver_driver/models/payment_model/razorpay_model.dart';
-import 'package:jippydriver_driver/models/payment_model/stripe_model.dart';
-import 'package:jippydriver_driver/models/payment_model/wallet_setting_model.dart';
-import 'package:jippydriver_driver/models/payment_model/xendit.dart';
 import 'package:jippydriver_driver/models/referral_model.dart';
 import 'package:jippydriver_driver/models/tax_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
@@ -49,7 +34,6 @@ import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_compress/video_compress.dart';
 import '../models/driver_earning_history_model.dart';
@@ -957,11 +941,6 @@ class FireStoreUtils {
           if (referralAmount != null) {
             Constant.referralAmount = referralAmount['referralAmount']?.toString() ?? '';
           }
-          // Process emailSetting
-          final emailSetting = data['emailSetting'];
-          if (emailSetting != null) {
-            Constant.mailSettings = MailSettings.fromJson(emailSetting);
-          }
           final placeHolderImage = data['placeHolderImage'];
           if (placeHolderImage != null) {
             Constant.placeHolderImage = placeHolderImage['image'] ?? '';
@@ -1235,7 +1214,15 @@ class FireStoreUtils {
     bool forceRefresh = false,
   }) async {
     try {
-      // final driverId = await FireStoreUtils.getCurrentUid();
+      // final drive  }) async {
+      //     try {
+      //       // final driverId = await FireStoreUtils.getCurrentUid();
+      //
+      //       // if (driverId.isEmpty) {
+      //       //   return [];
+      //       // }
+      //       //
+      //       // final httpClient = HttpClientServicerId = await FireStoreUtils.getCurrentUid();
 
       // if (driverId.isEmpty) {
       //   return [];
@@ -1741,37 +1728,6 @@ class FireStoreUtils {
       }
     }
   }
-  static Future<EmailTemplateModel?> getEmailTemplates(String type) async {
-    EmailTemplateModel? emailTemplateModel;
-    try {
-      final response = await http.get(
-        Uri.parse('${Constant.baseUrl}restaurant/email-templates/$type'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
-        final dynamic templateData = responseData['data'] ?? responseData;
-        debugPrint("------>");
-        debugPrint(templateData);
-        if (templateData != null) {
-          emailTemplateModel = EmailTemplateModel.fromJson(templateData);
-        }
-      } else if (response.statusCode == 404) {
-        // Email template not found
-        debugPrint("------>");
-        debugPrint("Email template not found for type: $type");
-        emailTemplateModel = null;
-      } else {
-        throw Exception('Failed to load email template: ${response.statusCode}');
-      }
-    } catch (e, s) {
-      log('APIUtils.getEmailTemplates $e $s');
-      return null;
-    }
-    return emailTemplateModel;
-  }
 
   /// Total earnings shown on home `_ChargeBreakdown` / `_totalEarningsBox` (d2r + r2c + tip +
   /// surge). The app stores that value on the order in [OrderModel.calculatedCharges]
@@ -1858,36 +1814,6 @@ class FireStoreUtils {
     await FireStoreUtils.updateUserWalletHomeScreen(
         userId: userId, amount: homeScreenEarnings);
     log('[updateWallateAmount] END - Order ID: ${orderModel.id}');
-  }
-
-  static sendTopUpMail(
-      {required String amount,
-      required String paymentMethod,
-      required String tractionId}) async {
-    EmailTemplateModel? emailTemplateModel =
-        await FireStoreUtils.getEmailTemplates(Constant.walletTopup);
-
-    String newString = emailTemplateModel!.message.toString();
-    newString = newString.replaceAll(
-        "{username}",
-        (Constant.userModel?.firstName.toString() ?? '') +
-            (Constant.userModel?.lastName.toString() ?? ''));
-    newString = newString.replaceAll(
-        "{date}", DateFormat('yyyy-MM-dd').format(Timestamp.now().toDate()));
-    newString =
-        newString.replaceAll("{amount}", Constant.amountShow(amount: amount));
-    newString =
-        newString.replaceAll("{paymentmethod}", paymentMethod.toString());
-    newString = newString.replaceAll("{transactionid}", tractionId.toString());
-    newString = newString.replaceAll(
-        "{newwalletbalance}.",
-        Constant.amountShow(
-            amount: Constant.userModel?.walletAmount.toString() ?? '0'));
-    await Constant.sendMail(
-        subject: emailTemplateModel.subject,
-        isAdmin: emailTemplateModel.isSendToAdmin,
-        body: newString,
-        recipients: [Constant.userModel?.email ?? '']);
   }
 
   static Future<List<Map<String, dynamic>>> getVendorProducts(String id) async {
@@ -2325,30 +2251,6 @@ class FireStoreUtils {
         debugPrint('Error fetching withdrawal history: $e');
         return [];
       }
-    }
-
-    static sendPayoutMail(
-        {required String amount, required String payoutrequestid}) async {
-      EmailTemplateModel? emailTemplateModel =
-          await FireStoreUtils.getEmailTemplates(Constant.payoutRequest);
-      String body = emailTemplateModel!.subject.toString();
-      body = body.replaceAll("{userid}", Constant.userModel!.id.toString());
-      String newString = emailTemplateModel.message.toString();
-      newString =
-          newString.replaceAll("{username}", Constant.userModel!.fullName);
-      newString =
-          newString.replaceAll("{userid}", Constant.userModel!.id.toString());
-      newString =
-          newString.replaceAll("{amount}", Constant.amountShow(amount: amount));
-      newString =
-          newString.replaceAll("{payoutrequestid}", payoutrequestid.toString());
-      newString = newString.replaceAll("{usercontactinfo}",
-          "${Constant.userModel!.email}\n${Constant.userModel!.phoneNumber}");
-      await Constant.sendMail(
-          subject: body,
-          isAdmin: emailTemplateModel.isSendToAdmin,
-          body: newString,
-          recipients: [Constant.userModel!.email],);
     }
 
 
