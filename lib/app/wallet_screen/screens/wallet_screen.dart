@@ -192,7 +192,7 @@ class WalletScreen extends StatelessWidget {
                             label: Text(
                               'Current Month',
                               style: TextStyle(
-                                color: controller.incentiveFilter.value == 'currentMonth'
+                                color: controller.incentiveFilter.value == 'CURRENT_MONTH'
                                     ? AppThemeData.grey900
                                     : AppThemeData.grey700,
                                 fontFamily: AppThemeData.semiBold,
@@ -200,14 +200,14 @@ class WalletScreen extends StatelessWidget {
                             ),
                             selected:
                             controller.incentiveFilter.value ==
-                                'currentMonth',
+                                'CURRENT_MONTH',
                             selectedColor: AppThemeData.secondary300.withOpacity(0.75),
                             backgroundColor: isDark
                                 ? AppThemeData.grey800
                                 : AppThemeData.grey100,
                             onSelected: (_) async {
                               controller.incentiveFilter.value =
-                              'currentMonth';
+                              'CURRENT_MONTH';
                               await controller.fetchIncentiveHistory(
                                 reset: true,
                               );

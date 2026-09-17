@@ -1,6 +1,6 @@
 import 'package:jippydriver_driver/app/home_screen/home_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
-import 'package:jippydriver_driver/controllers/dash_board_controller.dart';
+import 'package:jippydriver_driver/app/dash_board_screen/controller/dash_board_controller.dart';
 import 'package:jippydriver_driver/app/home_screen/screens/home_screen_multiple_order/controller/home_screen_multiple_order_controller.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';

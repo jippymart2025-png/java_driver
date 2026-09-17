@@ -168,31 +168,53 @@ class WalletController extends GetxController {
     bool reset = true,
   }) async {
     try {
+      // Get the logged-in driver's database ID
+      final String? userId = Constant.userModel?.id;
 
-      log("USER ID = ${userModel.value.id}");
-      log("FIREBASE ID = ${userModel.value.firebaseId}");
+      log("========================================");
+      log("INCENTIVE HISTORY");
+      log("USER ID       = $userId");
+      log("FIREBASE ID   = ${Constant.userModel?.firebaseId}");
+      log("========================================");
+
+      // UserModel.id is String?, but API requires int
+      final int? driverId = int.tryParse(userId ?? '');
+
+      // Never send driverId=0
+      if (driverId == null || driverId <= 0) {
+        log("❌ INVALID DRIVER ID: $userId");
+        log("❌ Incentive API request cancelled");
+        return;
+      }
 
       if (reset) {
         incentivePage = 0;
         incentives.clear();
+        incentiveHasMore.value = true;
       }
 
-      final response =
-      await ApiService.getDriverIncentiveHistory(
-        driverId: 1,
+      log("✅ DRIVER ID SENT TO API = $driverId");
+      log("FILTER = ${incentiveFilter.value}");
+      log("PAGE = $incentivePage");
+      log("SIZE = 20");
+
+      final response = await ApiService.getDriverIncentiveHistory(
+        driverId: driverId,
         filter: incentiveFilter.value,
         page: incentivePage,
         size: 20,
       );
 
-      if (response == null) return;
+      if (response == null) {
+        log("❌ Incentive API returned null");
+        return;
+      }
 
       incentives.addAll(response.content);
 
       totalIncentiveAmount.value = incentives.fold(
         0.0,
-            (sum, item) =>
-        sum + (item.incentiveAmount ?? 0),
+            (sum, item) => sum + (item.incentiveAmount ?? 0),
       );
 
       incentiveHasMore.value = !response.last;
@@ -201,20 +223,13 @@ class WalletController extends GetxController {
         incentivePage++;
       }
 
-      log(
-        "INCENTIVES COUNT = ${incentives.length}",
-      );
-
-      log(
-        "TOTAL INCENTIVE = ${totalIncentiveAmount.value}",
-      );
+      log("✅ INCENTIVES COUNT = ${incentives.length}");
+      log("✅ TOTAL INCENTIVE = ${totalIncentiveAmount.value}");
+      log("✅ HAS MORE = ${incentiveHasMore.value}");
     } catch (e, st) {
-      log(
-        'fetchIncentiveHistory error: $e\n$st',
-      );
+      log('fetchIncentiveHistory error: $e\n$st');
     }
   }
-
   void _onScroll() {
     final threshold = scrollController.position.maxScrollExtent - 200;
     if (scrollController.position.pixels >= threshold &&

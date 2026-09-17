@@ -1,17 +1,17 @@
 import 'package:get/get.dart';
 
-import '../../constant/constant.dart';
-import '../../constant/show_toast_dialog 2.dart';
-import '../../controllers/dash_board_controller.dart';
-import '../../models/user_model.dart';
-import '../../utils/dark_theme_provider.dart';
-import '../../utils/fire_store_utils.dart';
-import '../../utils/preferences.dart';
-import '../../controllers/edit_profile_controller.dart';
-import '../edit_profile_screen/edit_profile_screen.dart';
-import '../terms_and_condition/terms_and_condition_screen.dart';
-import '../verification_screen/verification_screen.dart';
-import '../withdraw_method_setup_screens/withdraw_method_setup_screen.dart';
+import '../../../constant/constant.dart';
+import '../../../constant/show_toast_dialog 2.dart';
+import '../../dash_board_screen/controller/dash_board_controller.dart';
+import '../../../models/user_model.dart';
+import '../../../utils/dark_theme_provider.dart';
+import '../../../utils/fire_store_utils.dart';
+import '../../../utils/preferences.dart';
+import '../../../controllers/edit_profile_controller.dart';
+import '../../edit_profile_screen/edit_profile_screen.dart';
+import '../../terms_and_condition/screens/terms_and_condition_screen.dart';
+import '../../verification_screen/screens/verification_screen.dart';
+import '../../withdraw_method_setup_screens/withdraw_method_setup_screen.dart';
 
 class ProfileController extends GetxController {
   // ── Dependencies ────────────────────────────────────────────────────

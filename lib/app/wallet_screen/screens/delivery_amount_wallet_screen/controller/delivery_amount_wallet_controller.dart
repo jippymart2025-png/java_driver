@@ -224,11 +224,6 @@ class DeliveryAmountWalletController extends GetxController {
         userModel.value = profile;
         Constant.userModel = profile;
       }
-      final paymentData = await FireStoreUtils.getPaymentSettingsData();
-      if (paymentData?['withdrawMethod'] != null) {
-        withdrawMethodModel.value =
-            WithdrawMethodModel.fromJson(paymentData!['withdrawMethod']);
-      }
     } catch (e, st) {
       log('_loadProfileAndPaymentMethod error: $e\n$st');
     }

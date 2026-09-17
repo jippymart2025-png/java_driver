@@ -5,18 +5,18 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:jippydriver_driver/app/home_screen/home_screen.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/widgets/dashboard_bottom_nav_bar.dart';
-import 'package:jippydriver_driver/app/order_list_screen/order_list_screen.dart';
-import 'package:jippydriver_driver/app/wallet_screen/wallet_screen.dart';
 import 'package:jippydriver_driver/app/wallet_screen/screens/delivery_amount_wallet_screen/delivery_amount_wallet_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
-import 'package:jippydriver_driver/controllers/dash_board_controller.dart';
+import 'package:jippydriver_driver/app/dash_board_screen/controller/dash_board_controller.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/main.dart';
-import '../profile/profile_screen.dart'; // isInPipMode
+import '../../order_list_screen/screens/order_list_screen.dart';
+import '../../profile/profile_screen.dart';
+import '../../wallet_screen/screens/wallet_screen.dart'; // isInPipMode
 
 // ===========================================================================
 //  DashBoardScreen
@@ -89,7 +89,6 @@ class _DashBoardScreenState extends State<DashBoardScreen> {
         ),
       ),
       actions: [
-        if (Constant.userModel?.vendorID?.isEmpty == true)
           InkWell(
             onTap: () => Get.to(const DeliveryAmountWalletScreen(isAppBarShow: true)),
             child: SvgPicture.asset('assets/icons/delivery_wallet.svg', height: 28, width: 28),

@@ -93,7 +93,7 @@ class ApiService {
               '&page=$page'
               '&size=$size',
         ),
-        headers: await getHeaders()
+        headers: await getHeaders(),
       );
 
       log(

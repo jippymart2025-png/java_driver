@@ -1257,12 +1257,10 @@ class FireStoreUtils {
       //   timeout: const Duration(seconds: 12),
       // );
 
-      final driverId = "4"; // TEMP FIX
+      final driverId = await FireStoreUtils.getCurrentUid(); // TEMP FIX
       final httpClient = HttpClientService();
 
       final url =
-          // '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=$driverId';
-
           '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=$driverId';
 
       log("EARNINGS URL => $url");
@@ -1323,145 +1321,141 @@ class FireStoreUtils {
   /// Fetches payment gateway settings, persists them to [Preferences], and
   /// returns the raw `data` map (useful for fields not stored in prefs, e.g.
   /// withdraw method).
-  static Future<Map<String, dynamic>?> getPaymentSettingsData() async {
-    try {
-      final httpClient = HttpClientService();
-      final response = await httpClient.get(
-        Uri.parse('${Constant.baseUrl}settings/payment'),
-
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization' : 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjaGFuZGFuYW11bmphQGdtYWlsLmNvbSIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo1LCJpYXQiOjE3ODE2OTc0OTIsImV4cCI6MTc4MTc4Mzg5Mn0.aWAuZXJ_cvR869SLhto7ZPqrHz1CK6kZkIDvoK9S9x4',
-        },
-        cacheStrategy: CacheStrategy.settings,
-        useCache: true,
-        timeout: const Duration(seconds: 15),
-      );
-
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-        if (responseData['success'] == true) {
-          final Map<String, dynamic> paymentData = responseData['data'];
-
-          // Process each payment method
-          if (paymentData['payFastSettings'] != null) {
-            PayFastModel payFastModel = PayFastModel.fromJson(paymentData['payFastSettings']);
-            await Preferences.setString(
-                Preferences.payFastSettings,
-                jsonEncode(payFastModel.toJson())
-            );
-          }
-
-          if (paymentData['MercadoPago'] != null) {
-            MercadoPagoModel mercadoPagoModel = MercadoPagoModel.fromJson(paymentData['MercadoPago']);
-            await Preferences.setString(
-                Preferences.mercadoPago,
-                jsonEncode(mercadoPagoModel.toJson())
-            );
-          }
-
-          if (paymentData['paypalSettings'] != null) {
-            PayPalModel payPalModel = PayPalModel.fromJson(paymentData['paypalSettings']);
-            await Preferences.setString(
-                Preferences.paypalSettings,
-                jsonEncode(payPalModel.toJson())
-            );
-          }
-
-          if (paymentData['stripeSettings'] != null) {
-            StripeModel stripeModel = StripeModel.fromJson(paymentData['stripeSettings']);
-            await Preferences.setString(
-                Preferences.stripeSettings,
-                jsonEncode(stripeModel.toJson())
-            );
-          }
-
-          if (paymentData['flutterWave'] != null) {
-            FlutterWaveModel flutterWaveModel = FlutterWaveModel.fromJson(paymentData['flutterWave']);
-            await Preferences.setString(
-                Preferences.flutterWave,
-                jsonEncode(flutterWaveModel.toJson())
-            );
-          }
-
-          if (paymentData['payStack'] != null) {
-            PayStackModel payStackModel = PayStackModel.fromJson(paymentData['payStack']);
-            await Preferences.setString(
-                Preferences.payStack,
-                jsonEncode(payStackModel.toJson())
-            );
-          }
-
-          if (paymentData['PaytmSettings'] != null) {
-            PaytmModel paytmModel = PaytmModel.fromJson(paymentData['PaytmSettings']);
-            await Preferences.setString(
-                Preferences.paytmSettings,
-                jsonEncode(paytmModel.toJson())
-            );
-          }
-
-          if (paymentData['walletSettings'] != null) {
-            WalletSettingModel walletSettingModel = WalletSettingModel.fromJson(paymentData['walletSettings']);
-            await Preferences.setString(
-                Preferences.walletSettings,
-                jsonEncode(walletSettingModel.toJson())
-            );
-          }
-
-          if (paymentData['razorpaySettings'] != null) {
-            RazorPayModel razorPayModel = RazorPayModel.fromJson(paymentData['razorpaySettings']);
-            await Preferences.setString(
-                Preferences.razorpaySettings,
-                jsonEncode(razorPayModel.toJson())
-            );
-          }
-
-          if (paymentData['CODSettings'] != null) {
-            CodSettingModel codSettingModel = CodSettingModel.fromJson(paymentData['CODSettings']);
-            await Preferences.setString(
-                Preferences.codSettings,
-                jsonEncode(codSettingModel.toJson())
-            );
-          }
-
-          if (paymentData['midtrans_settings'] != null) {
-            MidTrans midTrans = MidTrans.fromJson(paymentData['midtrans_settings']);
-            await Preferences.setString(
-                Preferences.midTransSettings,
-                jsonEncode(midTrans.toJson())
-            );
-          }
-
-          if (paymentData['orange_money_settings'] != null) {
-            OrangeMoney orangeMoney = OrangeMoney.fromJson(paymentData['orange_money_settings']);
-            await Preferences.setString(
-                Preferences.orangeMoneySettings,
-                jsonEncode(orangeMoney.toJson())
-            );
-          }
-
-          if (paymentData['xendit_settings'] != null) {
-            Xendit xendit = Xendit.fromJson(paymentData['xendit_settings']);
-            await Preferences.setString(
-                Preferences.xenditSettings,
-                jsonEncode(xendit.toJson())
-            );
-          }
-          return paymentData;
-        }
-        debugPrint('Failed to load payment settings: ${responseData['message']}');
-        return null;
-      }
-      debugPrint('HTTP error ${response.statusCode}: ${response.body}');
-      return null;
-    } catch (e) {
-      debugPrint('Error fetching payment settings: $e');
-      return null;
-    }
-  }
+  // static Future<Map<String, dynamic>?> getPaymentSettingsData() async {
+  //   try {
+  //     final httpClient = HttpClientService();
+  //     final response = await httpClient.get(
+  //       Uri.parse('${Constant.baseUrl}settings/payment'),
+  //
+  //       headers: await getHeaders(),
+  //       cacheStrategy: CacheStrategy.settings,
+  //       useCache: true,
+  //       timeout: const Duration(seconds: 15),
+  //     );
+  //
+  //
+  //     if (response.statusCode == 200) {
+  //       final Map<String, dynamic> responseData = jsonDecode(response.body);
+  //
+  //       if (responseData['success'] == true) {
+  //         final Map<String, dynamic> paymentData = responseData['data'];
+  //
+  //         // Process each payment method
+  //         if (paymentData['payFastSettings'] != null) {
+  //           PayFastModel payFastModel = PayFastModel.fromJson(paymentData['payFastSettings']);
+  //           await Preferences.setString(
+  //               Preferences.payFastSettings,
+  //               jsonEncode(payFastModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['MercadoPago'] != null) {
+  //           MercadoPagoModel mercadoPagoModel = MercadoPagoModel.fromJson(paymentData['MercadoPago']);
+  //           await Preferences.setString(
+  //               Preferences.mercadoPago,
+  //               jsonEncode(mercadoPagoModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['paypalSettings'] != null) {
+  //           PayPalModel payPalModel = PayPalModel.fromJson(paymentData['paypalSettings']);
+  //           await Preferences.setString(
+  //               Preferences.paypalSettings,
+  //               jsonEncode(payPalModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['stripeSettings'] != null) {
+  //           StripeModel stripeModel = StripeModel.fromJson(paymentData['stripeSettings']);
+  //           await Preferences.setString(
+  //               Preferences.stripeSettings,
+  //               jsonEncode(stripeModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['flutterWave'] != null) {
+  //           FlutterWaveModel flutterWaveModel = FlutterWaveModel.fromJson(paymentData['flutterWave']);
+  //           await Preferences.setString(
+  //               Preferences.flutterWave,
+  //               jsonEncode(flutterWaveModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['payStack'] != null) {
+  //           PayStackModel payStackModel = PayStackModel.fromJson(paymentData['payStack']);
+  //           await Preferences.setString(
+  //               Preferences.payStack,
+  //               jsonEncode(payStackModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['PaytmSettings'] != null) {
+  //           PaytmModel paytmModel = PaytmModel.fromJson(paymentData['PaytmSettings']);
+  //           await Preferences.setString(
+  //               Preferences.paytmSettings,
+  //               jsonEncode(paytmModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['walletSettings'] != null) {
+  //           WalletSettingModel walletSettingModel = WalletSettingModel.fromJson(paymentData['walletSettings']);
+  //           await Preferences.setString(
+  //               Preferences.walletSettings,
+  //               jsonEncode(walletSettingModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['razorpaySettings'] != null) {
+  //           RazorPayModel razorPayModel = RazorPayModel.fromJson(paymentData['razorpaySettings']);
+  //           await Preferences.setString(
+  //               Preferences.razorpaySettings,
+  //               jsonEncode(razorPayModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['CODSettings'] != null) {
+  //           CodSettingModel codSettingModel = CodSettingModel.fromJson(paymentData['CODSettings']);
+  //           await Preferences.setString(
+  //               Preferences.codSettings,
+  //               jsonEncode(codSettingModel.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['midtrans_settings'] != null) {
+  //           MidTrans midTrans = MidTrans.fromJson(paymentData['midtrans_settings']);
+  //           await Preferences.setString(
+  //               Preferences.midTransSettings,
+  //               jsonEncode(midTrans.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['orange_money_settings'] != null) {
+  //           OrangeMoney orangeMoney = OrangeMoney.fromJson(paymentData['orange_money_settings']);
+  //           await Preferences.setString(
+  //               Preferences.orangeMoneySettings,
+  //               jsonEncode(orangeMoney.toJson())
+  //           );
+  //         }
+  //
+  //         if (paymentData['xendit_settings'] != null) {
+  //           Xendit xendit = Xendit.fromJson(paymentData['xendit_settings']);
+  //           await Preferences.setString(
+  //               Preferences.xenditSettings,
+  //               jsonEncode(xendit.toJson())
+  //           );
+  //         }
+  //         return paymentData;
+  //       }
+  //       debugPrint('Failed to load payment settings: ${responseData['message']}');
+  //       return null;
+  //     }
+  //     debugPrint('HTTP error ${response.statusCode}: ${response.body}');
+  //     return null;
+  //   } catch (e) {
+  //     debugPrint('Error fetching payment settings: $e');
+  //     return null;
+  //   }
+  // }
 
 
   static Future<OrderModel?> getOrderById(String orderId) async {

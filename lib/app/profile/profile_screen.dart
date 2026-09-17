@@ -16,8 +16,8 @@ import '../../utils/dark_theme_provider.dart';
 import '../../utils/fire_store_utils.dart';
 import '../../utils/network_image_widget.dart';
 import '../auth_screen/screens/login_screen.dart';
-import '../verification_screen/verification_screen.dart';
-import 'profile_controller.dart';
+import '../verification_screen/screens/verification_screen.dart';
+import 'controllers/profile_controller.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ProfileScreen

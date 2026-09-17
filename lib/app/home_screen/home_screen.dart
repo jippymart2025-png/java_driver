@@ -11,7 +11,7 @@ import 'package:jippydriver_driver/app/home_screen/screens/delivery_order_screen
 import 'package:jippydriver_driver/app/home_screen/screens/pickup_order_screen/pickup_order_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
-import 'package:jippydriver_driver/controllers/dash_board_controller.dart';
+import 'package:jippydriver_driver/app/dash_board_screen/controller/dash_board_controller.dart';
 import 'package:jippydriver_driver/app/home_screen/controller/home_controller.dart';
 import 'package:jippydriver_driver/app/home_screen/widgets/order_bottom_drawer.dart';
 import 'package:jippydriver_driver/app/home_screen/widgets/today_dashboard_section.dart';

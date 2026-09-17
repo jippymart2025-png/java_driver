@@ -1,6 +1,5 @@
 import 'package:jippydriver_driver/constant/constant.dart';
-import 'package:jippydriver_driver/controllers/dash_board_controller.dart';
-import 'package:jippydriver_driver/controllers/order_list_controller.dart';
+import 'package:jippydriver_driver/app/dash_board_screen/controller/dash_board_controller.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/round_button_fill.dart';
@@ -12,6 +11,8 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:timelines_plus/timelines_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../controllers/order_list_controller.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN
