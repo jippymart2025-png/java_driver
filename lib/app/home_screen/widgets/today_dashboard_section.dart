@@ -78,7 +78,7 @@ class _TodayDashboardSectionState extends State<TodayDashboardSection> {
              // baseEarnings //+ widget.ctrl.creditedBonus.value;
 
 
-        //  print(
+        //  debugPrint(
           //  "BASE=$baseEarnings BONUS=${widget.ctrl.creditedBonus.value} TOTAL=$totalEarnings",
           //);
           return Row(
@@ -111,7 +111,7 @@ class _TodayDashboardSectionState extends State<TodayDashboardSection> {
 
         // ── Incentive card ─────────────────────────────────────────────────
         Obx(() {
-          print(
+          debugPrint(
               "UI REBUILD -> BONUS=${widget.ctrl.creditedBonus.value}"
           );
           final api       = widget.ctrl.todayDashboard.value;
@@ -206,10 +206,10 @@ class _IncentiveCardState extends State<_IncentiveCard>
   //         "setState called after dispose" crash after async gaps.
 
   Future<void> _creditBonusToWallet() async {
-    print("Credit button clicked");
+    debugPrint("Credit button clicked");
     final bonusAmount =
         widget.ctrl.todayDashboard.value?.driverIncentiveBonus ?? 0.0;
-    print("API Bonus Amount = $bonusAmount");
+    debugPrint("API Bonus Amount = $bonusAmount");
 
     if (_creditingBonus || _bonusCredited) return;
     if (!mounted) return;
@@ -237,13 +237,13 @@ class _IncentiveCardState extends State<_IncentiveCard>
         if (!mounted) return;
 
         if (!alreadyClaimedToday) {
-          print("BONUS BEFORE = ${widget.ctrl.creditedBonus.value}");
-          // print("Bonus Amount = $bonusAmount");
-          // print("Before = ${widget.ctrl.creditedBonus.value}");
+          debugPrint("BONUS BEFORE = ${widget.ctrl.creditedBonus.value}");
+          // debugPrint("Bonus Amount = $bonusAmount");
+          // debugPrint("Before = ${widget.ctrl.creditedBonus.value}");
           widget.ctrl.creditedBonus.value += bonusAmount;
-         //print("After = ${widget.ctrl.creditedBonus.value}");
-          print("BONUS AFTER = ${widget.ctrl.creditedBonus.value}");
-          print("AFTER CREDIT -> ${widget.ctrl.creditedBonus.value}");
+         //debugPrint("After = ${widget.ctrl.creditedBonus.value}");
+          debugPrint("BONUS AFTER = ${widget.ctrl.creditedBonus.value}");
+          debugPrint("AFTER CREDIT -> ${widget.ctrl.creditedBonus.value}");
         }
         setState(() {
           _bonusCredited  = true;
@@ -276,8 +276,8 @@ class _IncentiveCardState extends State<_IncentiveCard>
 
     final claimedDate = prefs.getString(_dailyBonusPrefKey) ?? '';
 
-    print("CLAIMED DATE = $claimedDate");
-    print("TODAY DATE = $_todayDateKey");
+    debugPrint("CLAIMED DATE = $claimedDate");
+    debugPrint("TODAY DATE = $_todayDateKey");
 
     if (!mounted || claimedDate != _todayDateKey) {
       return;
@@ -288,7 +288,7 @@ class _IncentiveCardState extends State<_IncentiveCard>
 
     widget.ctrl.creditedBonus.value = savedBonus;
 
-    print("RESTORED BONUS = $savedBonus");
+    debugPrint("RESTORED BONUS = $savedBonus");
 
     setState(() {
       _bonusCredited = true;

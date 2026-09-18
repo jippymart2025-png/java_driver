@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
@@ -63,10 +64,10 @@ class OrderListController extends GetxController {
 
   @override
   void onInit() {
-    print("ORDER LIST CONTROLLER INIT");
+    debugPrint("ORDER LIST CONTROLLER INIT");
     super.onInit();
-    // print("ID => ${Constant.userModel?.id}");
-    // print("FIREBASE ID => ${Constant.userModel?.firebaseId}");
+    // debugPrint("ID => ${Constant.userModel?.id}");
+    // debugPrint("FIREBASE ID => ${Constant.userModel?.firebaseId}");
 
     //AppLogger.log('OrderListController onInit() called', tag: 'Controller');
 
@@ -77,10 +78,10 @@ class OrderListController extends GetxController {
   }
 // ---------- THIS FUNCTION IS ADDED NOW-------------
   Future<void> fetchOrderHistory() async {
-    print("=== FETCH ORDER HISTORY STARTED ===");
-    print("ID => ${Constant.userModel?.id}");
-    print("FIREBASE ID => ${Constant.userModel?.firebaseId}");
-    print("DRIVER ID SENT => ${Constant.userModel?.id}");
+    debugPrint("=== FETCH ORDER HISTORY STARTED ===");
+    debugPrint("ID => ${Constant.userModel?.id}");
+    debugPrint("FIREBASE ID => ${Constant.userModel?.firebaseId}");
+    debugPrint("DRIVER ID SENT => ${Constant.userModel?.id}");
 
     try {
       isLoading.value = true;
@@ -91,8 +92,8 @@ class OrderListController extends GetxController {
         headers: await getHeaders(),
       );
 
-      print("STATUS => ${response.statusCode}");
-      print("BODY => ${response.body}");
+      debugPrint("STATUS => ${response.statusCode}");
+      debugPrint("BODY => ${response.body}");
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -130,30 +131,30 @@ class OrderListController extends GetxController {
             Map<String, dynamic>.from(item),
           );
 
-          print("================================");
-          print("ORDER ID => ${order.id}");
-          print("PICKUP => ${order.pickUpCharges}");
-          print("DELIVER => ${order.deliverCharges}");
-          print("SURGE => ${order.surgeFee}");
-          print("TIP => ${order.tipAmount}");
-          print("STATUS => ${order.status}");
-          print("VENDOR => ${order.vendor?.title}");
-          print("================================");
+          debugPrint("================================");
+          debugPrint("ORDER ID => ${order.id}");
+          debugPrint("PICKUP => ${order.pickUpCharges}");
+          debugPrint("DELIVER => ${order.deliverCharges}");
+          debugPrint("SURGE => ${order.surgeFee}");
+          debugPrint("TIP => ${order.tipAmount}");
+          debugPrint("STATUS => ${order.status}");
+          debugPrint("VENDOR => ${order.vendor?.title}");
+          debugPrint("================================");
 
           orderList.add(order);
         }
-        print("TOTAL ORDERS => ${orderList.length}");
+        debugPrint("TOTAL ORDERS => ${orderList.length}");
       }
         if (orderList.isNotEmpty) {
-          print("FIRST ORDER =>");
-          print(orderList.first.id);
+          debugPrint("FIRST ORDER =>");
+          debugPrint(orderList.first.id);
           print(orderList.first.pickUpCharges);
           print(orderList.first.deliverCharges);
           print(orderList.first.surgeFee);
 
       }
     } catch (e) {
-      print("fetchOrderHistory error => $e");
+      debugPrint("fetchOrderHistory error => $e");
     } finally {
       isLoading.value = false;
     }
@@ -162,7 +163,7 @@ class OrderListController extends GetxController {
   Future<void> fetchTotalEarnings() async {
     try {
       isLoading.value = true;
-      print("BEFORE API");
+      debugPrint("BEFORE API");
       final response = await http
           .get(
         Uri.parse(
@@ -172,10 +173,10 @@ class OrderListController extends GetxController {
       )
           .timeout(const Duration(seconds: 15));
 
-      print("AFTER API");
+      debugPrint("AFTER API");
 
-      print("STATUS => ${response.statusCode}");
-      print("BODY => ${response.body}");
+      debugPrint("STATUS => ${response.statusCode}");
+      debugPrint("BODY => ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -192,19 +193,19 @@ class OrderListController extends GetxController {
         totalDeliveryCharge.value =
             double.tryParse(data['totalDeliveryCharges'].toString()) ?? 0.0;
 
-        print("SUCCESS:");
-        print("totalOrders => ${totalOrders.value}");
-        print("totalCompleted => ${totalCompleted.value}");
-        print("totalTips => ${totalTips.value}");
-        print("totalEarnings => ${totalEarnings.value}");
-        print("totalDeliveryCharge => ${totalDeliveryCharge.value}");
+        debugPrint("SUCCESS:");
+        debugPrint("totalOrders => ${totalOrders.value}");
+        debugPrint("totalCompleted => ${totalCompleted.value}");
+        debugPrint("totalTips => ${totalTips.value}");
+        debugPrint("totalEarnings => ${totalEarnings.value}");
+        debugPrint("totalDeliveryCharge => ${totalDeliveryCharge.value}");
       } else {
-        print("API FAILED => ${response.statusCode}");
+        debugPrint("API FAILED => ${response.statusCode}");
       }
     } on TimeoutException {
-      print("fetchTotalEarnings TIMEOUT");
+      debugPrint("fetchTotalEarnings TIMEOUT");
     } catch (e, s) {
-      print("fetchTotalEarnings ERROR => $e");
+      debugPrint("fetchTotalEarnings ERROR => $e");
       print(s);
     } finally {
       isLoading.value = false;
@@ -279,8 +280,8 @@ class OrderListController extends GetxController {
   }) {
 
     final driverId = Constant.userModel?.id?.toString() ?? "1";
-    print("Constant.userModel = ${Constant.userModel}");
-    print("Constant.userModel.id = ${Constant.userModel?.id}");
+    debugPrint("Constant.userModel = ${Constant.userModel}");
+    debugPrint("Constant.userModel.id = ${Constant.userModel?.id}");
 
     return Uri.parse(
 
@@ -319,7 +320,7 @@ class OrderListController extends GetxController {
 
 
   Future<void> getOrder() async {
-    print("GET ORDER BLOCKED");
+    debugPrint("GET ORDER BLOCKED");
     if (_fetchingFirstPage) return;
     final tabForRequest = _activeTab;
     _fetchingFirstPage = true;
@@ -336,7 +337,7 @@ class OrderListController extends GetxController {
       totalDeliveryCharge.value = 0;
 
 
-      print(
+      debugPrint(
         "GET ORDER URL => ${_buildOrdersUrl(tab: tabForRequest, page: 1)}",
       );
 
@@ -354,8 +355,8 @@ class OrderListController extends GetxController {
         // }
 
       }else {
-    print("GET ORDER STATUS => ${response.statusCode}");
-    print("GET ORDER BODY => ${response.body}");
+    debugPrint("GET ORDER STATUS => ${response.statusCode}");
+    debugPrint("GET ORDER BODY => ${response.body}");
     }
     } catch (e) {
       log('getOrder() error: $e');
@@ -459,11 +460,11 @@ class OrderListController extends GetxController {
         totalCompleted.value = fallbackCompleted;
         totalDeliveryCharge.value = totalEarnings.value - totalTips.value;
 
-        print("CONTROLLER UPDATED");
-        print("totalEarnings => ${totalEarnings.value}");
-        print("totalTips => ${totalTips.value}");
-        print("totalOrders => ${totalOrders.value}");
-        print("totalCompleted => ${totalCompleted.value}");
+        debugPrint("CONTROLLER UPDATED");
+        debugPrint("totalEarnings => ${totalEarnings.value}");
+        debugPrint("totalTips => ${totalTips.value}");
+        debugPrint("totalOrders => ${totalOrders.value}");
+        debugPrint("totalCompleted => ${totalCompleted.value}");
       }
     } catch (e) {
       log('_handleSuccess() parse error: $e');
