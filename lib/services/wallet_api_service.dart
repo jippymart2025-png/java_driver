@@ -34,22 +34,19 @@ class ApiService {
 
       final decoded = json.decode(response.body);
 
-      // final normalized = decoded is List
-      //     ? {
-      //   "success": true,
-      //   "data": decoded,
-      //   "summary": {"total_wallet_amount": 0}
-      // }
-      //     : decoded;
+      // The Java API returns a plain JSON array (no pagination).
+      // Normalise it to the wrapper shape expected by the response model,
+      // computing the wallet total by summing credit / subtracting debit.
       double total = 0;
 
       if (decoded is List) {
         for (final item in decoded) {
           final amount = ((item['codAmount'] ?? 0) as num).toDouble();
+          final type = item['transactionType']?.toString() ?? '';
 
-          if (item['transactionType'] == 'credit') {
+          if (type.toLowerCase() == 'credit') {
             total += amount;
-          } else if (item['transactionType'] == 'debit') {
+          } else if (type.toLowerCase() == 'debit') {
             total -= amount;
           }
         }
@@ -64,6 +61,7 @@ class ApiService {
         }
       }
           : decoded;
+
       final parsed =
       WalletTransactionsApiResponse.fromJson(normalized);
 
@@ -71,8 +69,6 @@ class ApiService {
       log("TOTAL WALLET FROM API = ${parsed.totalWalletAmount}");
 
       return parsed;
-
-      return WalletTransactionsApiResponse.fromJson(normalized);
     } catch (e) {
       log('Wallet API Exception: $e');
       return null;

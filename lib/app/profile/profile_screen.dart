@@ -332,79 +332,7 @@ class _PulseDotState extends State<_PulseDot>
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Active Status Card
-// ═════════════════════════════════════════════════════════════════════════════
 
-// class _ActiveStatusCard extends StatelessWidget {
-//   final DarkThemeProvider theme;
-//   final ProfileController ctrl;
-//
-//   const _ActiveStatusCard({required this.theme, required this.ctrl});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final isDark = theme.getThem();
-//     return _Card(
-//       isDark: isDark,
-//       child: Padding(
-//         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-//         child: Row(
-//           children: [
-//             _IconBox(
-//               color: AppThemeData.primary300,
-//               child: const Icon(
-//                 CupertinoIcons.checkmark_shield_fill,
-//                 color: AppThemeData.primary300,
-//                 size: 18,
-//               ),
-//             ),
-//             const SizedBox(width: 14),
-//             Expanded(
-//               child: Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   Text(
-//                     'Available Status'.tr,
-//                     style: TextStyle(
-//                       color: isDark
-//                           ? AppThemeData.grey100
-//                           : AppThemeData.grey800,
-//                       fontFamily: AppThemeData.semiBold,
-//                       fontSize: 14,
-//                     ),
-//                   ),
-//                   const SizedBox(height: 2),
-//                   Text(
-//                     'Toggle your availability for orders'.tr,
-//                     style: TextStyle(
-//                       color: isDark
-//                           ? AppThemeData.grey400
-//                           : AppThemeData.grey500,
-//                       fontFamily: AppThemeData.regular,
-//                       fontSize: 12,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ),
-//             const SizedBox(width: 10),
-//             Transform.scale(
-//               scale: 0.85,
-//               child: GetX<ProfileController>(
-//                 builder: (c) => CupertinoSwitch(
-//                   value: c.dashCtrl.userModel.value.isActive ?? false,
-//                   activeColor: AppThemeData.primary300,
-//                   onChanged: (val) => c.toggleActive(val, theme),
-//                 ),
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // About App Card

@@ -231,7 +231,7 @@ class LoginController extends GetxController {
       // ---------------------------------------------------------
       // 8. Check driver role
       // ---------------------------------------------------------
-      if (userModel.role != Constant.userRoleDriver) {
+      if (userModel.role == Constant.userRoleDriver) {
         log(
           '❌ Invalid role: ${userModel.role}, '
               'expected: ${Constant.userRoleDriver}',

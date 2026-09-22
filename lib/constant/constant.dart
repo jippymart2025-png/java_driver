@@ -29,7 +29,7 @@ import 'package:get/get.dart';
 class Constant {
   // static String baseUrl  = "http://192.168.88.25:8000/api/";
   static String baseUrl  = "http://187.127.156.147:8084/api/";
-  static String userRoleDriver = 'driver';
+  static String userRoleDriver = 'DRIVER';
   static String userRoleCustomer = 'customer';
   static String userRoleVendor = 'vendor';
   static ShippingAddress selectedLocation = ShippingAddress();
@@ -51,11 +51,11 @@ class Constant {
   static String? referralAmount = "0.0";
   static String googlePlayLink = "https://play.google.com/store/apps/details?id=com.jippymart.driver";
   static String appStoreLink = "";
-  static String appVersion = "";
+  static String appVersion = "2.2.5";
   /// When true, backend requires all users to update (no skip).
   static bool forceUpdateRequired = false;
   /// Minimum app version required (e.g. "2.2.5"). Empty = not enforced.
-  static String minAppVersion = "";
+  static String minAppVersion = "2.2.5";
   /// When true, backend wants to show the update screen (check version).
   static bool showUpdate = false;
   static String termsAndConditions = "";

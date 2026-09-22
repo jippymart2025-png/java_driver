@@ -13,10 +13,8 @@ import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/models/wallet_transaction_model.dart';
 import 'package:jippydriver_driver/models/withdraw_method_model.dart';
 import 'package:jippydriver_driver/models/withdrawal_model.dart';
-import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/services/wallet_api_service.dart';
 import 'package:jippydriver_driver/models/driver_incentive_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class WalletController extends GetxController {
   // ─── Loading & Pagination State ────────────────────────────────────────────
@@ -25,12 +23,10 @@ class WalletController extends GetxController {
   final RxBool isFetchingMore = false.obs;
   final RxBool hasMore = true.obs;
 
-
-  int _currentPage = 1;
-  static const int _perPage = 20;
-
   int incentivePage = 0;
   final RxBool incentiveHasMore = true.obs;
+  final RxBool isFetchingMoreIncentive = false.obs;
+  final RxBool isIncentiveLoading = false.obs;
 
   // ─── Form Controllers ───────────────────────────────────────────────────────
   final TextEditingController amountController = TextEditingController();
@@ -76,8 +72,11 @@ class WalletController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _initialLoad();
+    if (Constant.userModel != null) {
+      userModel.value = Constant.userModel!;
+    }
     scrollController.addListener(_onScroll);
+    _initialLoad();
   }
 
   @override
@@ -92,28 +91,22 @@ class WalletController extends GetxController {
 
   // ─── Public API ─────────────────────────────────────────────────────────────
 
-  /// Full refresh — clears list and fetches page 1.
-  // Future<void> refresh() async {
-  //   _currentPage = 1;
-  //   hasMore.value = true;
-  //   transactions.clear();
-  //   await _fetchPage();
-  // }
-
+  /// Full refresh — clears both lists and re-fetches from page 1.
   Future<void> refresh() async {
-    _currentPage = 1;
     hasMore.value = true;
-
     transactions.clear();
-    incentives.clear();
     await _fetchPage();
-
-    if (isIncentiveTab.value) {
-      await fetchIncentiveHistory(reset: true);
-    }
+    await fetchIncentiveHistory(reset: true);
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
+
+  /// Resolve the numeric database id the Java API expects.
+  Future<String> _resolveDriverId() async {
+    final uid = Constant.userModel?.id;
+    if (uid != null && uid.trim().isNotEmpty) return uid.trim();
+    return await LoginController.getFirebaseId();
+  }
 
   Future<void> _initialLoad() async {
     isLoading.value = true;
@@ -130,35 +123,21 @@ class WalletController extends GetxController {
     if (!hasMore.value) return;
 
     try {
-      // final response = await FireStoreUtils.getWalletTransaction(
-      //   page: _currentPage,
-      //   perPage: _perPage,
-      // final driverId = await LoginController.getFirebaseId();
-      //final driverId = "1";
-
-      final driverId = await LoginController.getFirebaseId();
-
+      final driverId = await _resolveDriverId();
       final response = await ApiService.getWalletTransactions(
-        page: _currentPage,
-        perPage: _perPage,
         driverId: driverId,
       );
-
       if (response == null) return;
 
-      // Update wallet balance only on first page (authoritative value)
-      log("TOTAL WALLET = ${response.totalWalletAmount}");
-      if (_currentPage == 1) {
-        totalWalletAmount.value = response.totalWalletAmount;
-        userModel.update((u) => u?.walletAmount = response.totalWalletAmount);
-      }
+      // The API returns the complete list in a single response — no
+      // server-side paging — so replace the whole list on every fetch.
+      transactions.assignAll(response.data);
 
-      final newItems = response.data;
-      transactions.addAll(newItems);
+      // Wallet balance is derived from the full list (authoritative).
+      totalWalletAmount.value = response.totalWalletAmount;
+      userModel.update((u) => u?.walletAmount = response.totalWalletAmount);
 
-      // Determine if more pages exist
-      hasMore.value = newItems.length >= _perPage;
-      if (hasMore.value) _currentPage++;
+      hasMore.value = false;
     } catch (e, st) {
       log('WalletController._fetchPage error: $e\n$st');
     }
@@ -167,23 +146,15 @@ class WalletController extends GetxController {
   Future<void> fetchIncentiveHistory({
     bool reset = true,
   }) async {
+    isIncentiveLoading.value = true;
     try {
-      // Get the logged-in driver's database ID
+      // The Java API expects the numeric database driver id.
       final String? userId = Constant.userModel?.id;
-
-      log("========================================");
-      log("INCENTIVE HISTORY");
-      log("USER ID       = $userId");
-      log("FIREBASE ID   = ${Constant.userModel?.firebaseId}");
-      log("========================================");
-
-      // UserModel.id is String?, but API requires int
       final int? driverId = int.tryParse(userId ?? '');
 
-      // Never send driverId=0
+      // Never send driverId <= 0.
       if (driverId == null || driverId <= 0) {
         log("❌ INVALID DRIVER ID: $userId");
-        log("❌ Incentive API request cancelled");
         return;
       }
 
@@ -191,6 +162,7 @@ class WalletController extends GetxController {
         incentivePage = 0;
         incentives.clear();
         incentiveHasMore.value = true;
+        totalIncentiveAmount.value = 0;
       }
 
       log("✅ DRIVER ID SENT TO API = $driverId");
@@ -205,10 +177,7 @@ class WalletController extends GetxController {
         size: 20,
       );
 
-      if (response == null) {
-        log("❌ Incentive API returned null");
-        return;
-      }
+      if (response == null) return;
 
       incentives.addAll(response.content);
 
@@ -219,7 +188,7 @@ class WalletController extends GetxController {
 
       incentiveHasMore.value = !response.last;
 
-      if (!response.last) {
+      if (incentiveHasMore.value) {
         incentivePage++;
       }
 
@@ -228,13 +197,22 @@ class WalletController extends GetxController {
       log("✅ HAS MORE = ${incentiveHasMore.value}");
     } catch (e, st) {
       log('fetchIncentiveHistory error: $e\n$st');
+    } finally {
+      isIncentiveLoading.value = false;
     }
   }
+
   void _onScroll() {
+    if (!scrollController.hasClients) return;
+
     final threshold = scrollController.position.maxScrollExtent - 200;
-    if (scrollController.position.pixels >= threshold &&
-        !isFetchingMore.value &&
-        hasMore.value) {
+    if (scrollController.position.pixels < threshold) return;
+
+    if (isIncentiveTab.value) {
+      if (!isFetchingMoreIncentive.value && incentiveHasMore.value) {
+        _loadMoreIncentives();
+      }
+    } else if (!isFetchingMore.value && hasMore.value) {
       _loadMore();
     }
   }
@@ -243,6 +221,12 @@ class WalletController extends GetxController {
     isFetchingMore.value = true;
     await _fetchPage();
     isFetchingMore.value = false;
+  }
+
+  Future<void> _loadMoreIncentives() async {
+    isFetchingMoreIncentive.value = true;
+    await fetchIncentiveHistory(reset: false);
+    isFetchingMoreIncentive.value = false;
   }
 
   // ─── Withdrawal helpers ─────────────────────────────────────────────────────

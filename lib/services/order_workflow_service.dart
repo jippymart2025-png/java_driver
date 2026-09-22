@@ -126,7 +126,7 @@ class OrderWorkflowService {
     userForUpdate.orderRequestData?.remove(orderId);
     userForUpdate.inProgressOrderID?.remove(orderId);
 
-    await FireStoreUtils.updateUserWithoutWalletDelivery(userForUpdate);
+    // await FireStoreUtils.updateUserWithoutWalletDelivery(userForUpdate);
 
     // Refresh user to reflect the wallet/delivery mutations from separate APIs.
     final refreshedUser = await FireStoreUtils.getUserProfile(

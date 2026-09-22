@@ -664,7 +664,7 @@ final selectedState = Rxn<StateModel>();
                 .millisecondsSinceEpoch;
       }
 
-      log("UPDATE URL => ${Constant.baseUrl}driver-sql/users/update");
+      // log("UPDATE URL => ${Constant.baseUrl}driver-sql/users/update");
       log("UPDATE PAYLOAD => ${json.encode(payload)}");
       // final response = await http.post(
       //   Uri.parse('${Constant.baseUrl}driver-sql/users/update'),

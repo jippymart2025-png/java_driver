@@ -69,7 +69,7 @@ class FireStoreUtils {
     return await LoginController.getFirebaseId();
   }
 
-  /// Drops in-memory cache so the next [getUserProfile]/[getDriverDetailsData]
+  // / Drops in-memory cache so the next [getUserProfile]/[getDriverDetailsData]
   /// fetch sees fresh data.
   static void invalidateUserProfileCache(String uuid) {
     if (uuid.trim().isEmpty) return;
@@ -352,9 +352,9 @@ class FireStoreUtils {
             //     double.parse(amount);
         // IMPORTANT: Use updateUserWithoutWalletDelivery to avoid interfering with
         // wallet/delivery amounts that are managed by separate APIs
-        await FireStoreUtils.updateUserWithoutWalletDelivery(userModel).then((value) {
-          isAdded = value;
-        });
+        // await FireStoreUtils.updateUserWithoutWalletDelivery(userModel).then((value) {
+        //   isAdded = value;
+        // });
       }
     });
     return isAdded;
@@ -497,38 +497,38 @@ class FireStoreUtils {
   /// Update user without walletAmount and deliveryAmount fields
   /// This is used during order completion to avoid overwriting wallet/delivery amounts
   /// that are managed by separate APIs (driver-sql/wallet/update and driver-sql/delivery-amount/update)
-  static Future<bool> updateUserWithoutWalletDelivery(UserModel userModel) async {
-    try {
-      Map<String, dynamic> userData = userModel.toJson();
-      userData.remove('wallet_amount');
-      userData.remove('deliveryAmount');
-      log("updateUserWithoutWalletDelivery ${userData}");
-      final response = await http.post(
-        Uri.parse('${Constant.baseUrl}driver-sql/users/update'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode(userData),
-      );
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['success'] == true) {
-          // Don't update Constant.userModel here - it should be refreshed from API
-          log("User updated successfully (without wallet/delivery): ${responseData['message']}");
-          return true;
-        } else {
-          log("Failed to update user: ${responseData['message'] ?? 'Unknown error'}");
-          return false;
-        }
-      } else {
-        log("Failed to update user: ${response.statusCode} - ${response.body}");
-        return false;
-      }
-    } catch (error) {
-      log("Failed to update user: $error");
-      return false;
-    }
-  }
+  // static Future<bool> updateUserWithoutWalletDelivery(UserModel userModel) async {
+  //   try {
+  //     Map<String, dynamic> userData = userModel.toJson();
+  //     userData.remove('wallet_amount');
+  //     userData.remove('deliveryAmount');
+  //     log("updateUserWithoutWalletDelivery ${userData}");
+  //     final response = await http.post(
+  //       Uri.parse('${Constant.baseUrl}driver-sql/users/update'),
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: json.encode(userData),
+  //     );
+  //     if (response.statusCode == 200) {
+  //       final responseData = json.decode(response.body);
+  //       if (responseData['success'] == true) {
+  //         // Don't update Constant.userModel here - it should be refreshed from API
+  //         log("User updated successfully (without wallet/delivery): ${responseData['message']}");
+  //         return true;
+  //       } else {
+  //         log("Failed to update user: ${responseData['message'] ?? 'Unknown error'}");
+  //         return false;
+  //       }
+  //     } else {
+  //       log("Failed to update user: ${response.statusCode} - ${response.body}");
+  //       return false;
+  //     }
+  //   } catch (error) {
+  //     log("Failed to update user: $error");
+  //     return false;
+  //   }
+  // }
   static Future<List<OnBoardingModel>> getOnBoardingList() async {
     try {
       final response = await http.get(

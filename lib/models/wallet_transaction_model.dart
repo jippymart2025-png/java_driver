@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class WalletTransactionModel {
   String? userId;
   String? paymentMethod;
@@ -28,51 +26,40 @@ class WalletTransactionModel {
   });
 
   WalletTransactionModel.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    userId = json['user_id'];
-    // paymentMethod = json['payment_method'];
+    id = json['id'] ?? json['transactionId']?.toString();
+    userId = json['user_id'] ?? json['driverWalletId']?.toString();
     paymentMethod = json['payment_method'] ?? 'cod';
-    orderId = json['orderId'];
-    // final hasLegacyAmount = json.containsKey('amount');
-    // if (hasLegacyAmount) {
-    //   amount = _toDouble(json['amount']);
-    //   isTopup = json['isTopUp'] == true;
-    // } else {
-    //   final credit = _toDouble(json['credit']);
-    //   final debit = _toDouble(json['debit']);
-    //
-    //   if (debit > 0) {
-    //     amount = debit;
-    //     isTopup = true;
-    //   } else if (credit != 0) {
-    //     amount = credit.abs();
-    //     isTopup = credit > 0;
-    //   } else {
-    //     amount = 0.0;
-    //     isTopup = false;
-    //   }
-    // }
+    orderId = json['orderId'] ?? json['order_id'];
 
-    final codAmount = json['codAmount'];
-    final transactionType = json['transactionType']?.toString();
+    final codAmount = json['codAmount'] ?? json['amount'];
+    final transactionType =
+        json['transactionType']?.toString() ?? json['type']?.toString() ?? '';
 
     amount = _toDouble(codAmount);
 
-// Java API logic
-    if (transactionType == 'credit') {
+    // Java API returns transactionType in UPPERCASE (credit/debit),
+    // so treat it case-insensitively.
+    if (transactionType.toLowerCase() == 'credit') {
       isTopup = true;
-    } else if (transactionType == 'debit') {
+    } else if (transactionType.toLowerCase() == 'debit') {
       isTopup = false;
     } else {
-      isTopup = false;
+      isTopup = json['isTopUp'] == true;
     }
-    orderId = json['order_id'];
+
     paymentStatus = json['payment_status'];
-    //ate = _parseTimestamp(json['date']);
     date = _parseDate(json['createdAt'] ?? json['date']);
     transactionUser = json['transactionUser'] ?? 'customer';
-    note = json['note'] ??
-        (isTopup == true ? 'Wallet Top-up' : 'Wallet Transaction');
+
+    final rawNote = json['note'];
+    final oid = orderId;
+    if (rawNote != null) {
+      note = rawNote;
+    } else if (oid != null && oid.isNotEmpty) {
+      note = 'Order #$oid';
+    } else {
+      note = isTopup == true ? 'Wallet Top-up' : 'Wallet Transaction';
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -94,17 +81,6 @@ class WalletTransactionModel {
     if (value == null) return 0.0;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString()) ?? 0.0;
-  }
-
-  static Timestamp? _parseTimestamp(dynamic value) {
-    if (value == null) return null;
-    if (value is Timestamp) return value;
-    if (value is DateTime) return Timestamp.fromDate(value);
-    if (value is String) {
-      final parsed = DateTime.tryParse(value);
-      if (parsed != null) return Timestamp.fromDate(parsed);
-    }
-    return null;
   }
 
 

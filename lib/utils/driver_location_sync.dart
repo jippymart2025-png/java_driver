@@ -61,9 +61,9 @@ class DriverLocationSync {
 
       FireStoreUtils.invalidateUserProfileCache(uid);
 
-      if (pushToServer) {
-        await FireStoreUtils.updateUserWithoutWalletDelivery(user);
-      }
+      // if (pushToServer) {
+      //   await FireStoreUtils.updateUserWithoutWalletDelivery(user);
+      // }
     } catch (e, st) {
       debugPrint('DriverLocationSync error: $e\n$st');
     } finally {

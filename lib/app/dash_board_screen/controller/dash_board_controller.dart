@@ -81,7 +81,7 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _checkMandatoryUpdate();
     getUser();          // fetches user then starts location listener
-    updateDriverOrder();
+    // updateDriverOrder();
     _loadTheme();
     // Ensure HomeController is available for HomeScreen
     if (!Get.isRegistered<HomeController>()) {
@@ -177,41 +177,41 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
   //  Driver order sync
   // ══════════════════════════════════════════════════════════════════════
 
-  Future<void> updateDriverOrder() async {
-    try {
-      final res = await http.get(
-        Uri.parse('${Constant.baseUrl}update-driver-order'),
-        //Uri.parse('http://187.127.156.147:8084/api/driver/fetchEarnings?driverId=1&date=29%2F05%2F2026'),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 15));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final rawOrders = data['orders'] as List? ?? [];
-        final orders = <OrderModel>[];
-
-        for (final element in rawOrders) {
-          try {
-            orders.add(OrderModel.fromJson(element as Map<String, dynamic>));
-          } catch (e) {
-            AppLogger.log('updateDriverOrder parse error [${element['id']}]: $e', tag: 'Dashboard');
-          }
-        }
-
-        for (final order in orders) {
-          order.triggerDelivery = Timestamp.now();
-          await FireStoreUtils.setOrder(order);
-        }
-        AppLogger.log('updateDriverOrder: synced ${orders.length} orders', tag: 'Dashboard');
-      } else {
-        AppLogger.log('updateDriverOrder HTTP ${res.statusCode}', tag: 'Dashboard');
-      }
-    } on TimeoutException {
-      AppLogger.log('updateDriverOrder timed out', tag: 'Dashboard');
-    } catch (e) {
-      AppLogger.log('updateDriverOrder error: $e', tag: 'Dashboard');
-    }
-  }
+  // Future<void> updateDriverOrder() async {
+  //   try {
+  //     final res = await http.get(
+  //       Uri.parse('${Constant.baseUrl}update-driver-order'),
+  //       //Uri.parse('http://187.127.156.147:8084/api/driver/fetchEarnings?driverId=1&date=29%2F05%2F2026'),
+  //       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+  //     ).timeout(const Duration(seconds: 15));
+  //
+  //     if (res.statusCode == 200) {
+  //       final data = jsonDecode(res.body);
+  //       final rawOrders = data['orders'] as List? ?? [];
+  //       final orders = <OrderModel>[];
+  //
+  //       for (final element in rawOrders) {
+  //         try {
+  //           orders.add(OrderModel.fromJson(element as Map<String, dynamic>));
+  //         } catch (e) {
+  //           AppLogger.log('updateDriverOrder parse error [${element['id']}]: $e', tag: 'Dashboard');
+  //         }
+  //       }
+  //
+  //       for (final order in orders) {
+  //         order.triggerDelivery = Timestamp.now();
+  //         await FireStoreUtils.setOrder(order);
+  //       }
+  //       AppLogger.log('updateDriverOrder: synced ${orders.length} orders', tag: 'Dashboard');
+  //     } else {
+  //       AppLogger.log('updateDriverOrder HTTP ${res.statusCode}', tag: 'Dashboard');
+  //     }
+  //   } on TimeoutException {
+  //     AppLogger.log('updateDriverOrder timed out', tag: 'Dashboard');
+  //   } catch (e) {
+  //     AppLogger.log('updateDriverOrder error: $e', tag: 'Dashboard');
+  //   }
+  // }
 
   // ══════════════════════════════════════════════════════════════════════
   //  Location listener — single subscription, never leaked
@@ -361,41 +361,41 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
   //  Firestore write
   // ══════════════════════════════════════════════════════════════════════
 
-  Future<void> _writeToFirestore(UserLocation newLoc, double? heading) async {
-    try {
-      final currentUser = userModel.value;
-      if (currentUser.isActive != true) return;
-
-      currentUser.location = newLoc;
-      // if (heading != null) currentUser.rotation = heading;
-      Constant.userModel = currentUser;
-
-      // Avoid read-before-write by using in-memory user model.
-      final ok = await FireStoreUtils.updateUserWithoutWalletDelivery(currentUser);
-      if (ok) {
-        PerfTelemetry.inc('location_writes');
-      } else {
-        PerfTelemetry.inc('location_write_failures');
-      }
-
-      _lastWrittenLocation = newLoc;
-      _lastWrittenTime     = DateTime.now();
-
-      // Notify reactive listeners that the in-memory user model mutated.
-      userModel.refresh();
-      DriverLocationSync.afterLocationAppliedToUserModel?.call();
-
-      AppLogger.log(
-        'Firestore write — '
-            'lat: ${(newLoc.latitude ?? 0.0).toStringAsFixed(6)}, '
-            'lng: ${(newLoc.longitude ?? 0.0).toStringAsFixed(6)}, '
-            'mode: ${_isAppForeground ? "fg" : "bg"}',
-        tag: 'Location',
-      );
-    } catch (e) {
-      AppLogger.log('_writeToFirestore error: $e', tag: 'Location');
-    }
-  }
+  // Future<void> _writeToFirestore(UserLocation newLoc, double? heading) async {
+  //   try {
+  //     final currentUser = userModel.value;
+  //     if (currentUser.isActive != true) return;
+  //
+  //     currentUser.location = newLoc;
+  //     // if (heading != null) currentUser.rotation = heading;
+  //     Constant.userModel = currentUser;
+  //
+  //     // Avoid read-before-write by using in-memory user model.
+  //     // final ok = await FireStoreUtils.updateUserWithoutWalletDelivery(currentUser);
+  //     if (ok) {
+  //       PerfTelemetry.inc('location_writes');
+  //     } else {
+  //       PerfTelemetry.inc('location_write_failures');
+  //     }
+  //
+  //     _lastWrittenLocation = newLoc;
+  //     _lastWrittenTime     = DateTime.now();
+  //
+  //     // Notify reactive listeners that the in-memory user model mutated.
+  //     userModel.refresh();
+  //     DriverLocationSync.afterLocationAppliedToUserModel?.call();
+  //
+  //     AppLogger.log(
+  //       'Firestore write — '
+  //           'lat: ${(newLoc.latitude ?? 0.0).toStringAsFixed(6)}, '
+  //           'lng: ${(newLoc.longitude ?? 0.0).toStringAsFixed(6)}, '
+  //           'mode: ${_isAppForeground ? "fg" : "bg"}',
+  //       tag: 'Location',
+  //     );
+  //   } catch (e) {
+  //     AppLogger.log('_writeToFirestore error: $e', tag: 'Location');
+  //   }
+  // }
 
   // ══════════════════════════════════════════════════════════════════════
   //  Background batch
@@ -424,7 +424,7 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
     final latest = _pendingUpdates.last;
     _pendingUpdates.clear();
 
-    await _writeToFirestore(latest.loc, latest.heading);
+    // await _writeToFirestore(latest.loc, latest.heading);
   }
 }
 

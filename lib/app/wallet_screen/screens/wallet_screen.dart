@@ -11,7 +11,6 @@ import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/wallet_transaction_model.dart';
 import 'package:jippydriver_driver/models/withdrawal_model.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
-import 'package:jippydriver_driver/themes/responsive.dart';
 import 'package:jippydriver_driver/themes/round_button_fill.dart';
 import 'package:jippydriver_driver/themes/text_field_widget.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
@@ -219,43 +218,7 @@ class WalletScreen extends StatelessWidget {
                         : const SizedBox.shrink(),
                   ),
                 ),
-            //
-            //     SliverToBoxAdapter(
-            //       child: Obx(
-            //             () => controller.isIncentiveTab.value
-            //             ? Padding(
-            //           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            //           child: DropdownButtonFormField<String>(
-            //             value: controller.incentiveFilter.value,
-            //             decoration: const InputDecoration(
-            //               border: OutlineInputBorder(),
-            //               isDense: true,
-            //             ),
-            //             items: const [
-            //               DropdownMenuItem(
-            //                 value: 'all',
-            //                 child: Text('All'),
-            //               ),
-            //               DropdownMenuItem(
-            //                 value: 'currentMonth',
-            //                 child: Text('Current Month'),
-            //               ),
-            //             ],
-            //             onChanged: (value) async {
-            //               if (value == null) return;
-            //
-            //               controller.incentiveFilter.value = value;
-            //
-            //               await controller.fetchIncentiveHistory(
-            //                 reset: true,
-            //               );
-            //             },
-            //           ),
-            //         )
-            //             : const SizedBox.shrink(),
-            //       ),
-            //     ),
-                // ── Transaction List ────────────────────────────────────────
+
                 // ── Transaction / Incentive List ────────────────────────────
                 if (!controller.isIncentiveTab.value)
 
@@ -293,14 +256,19 @@ class WalletScreen extends StatelessWidget {
 
                 // INCENTIVE HISTORY
                   (controller.incentives.isEmpty)
-                      ? SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Constant.showEmptyView(
-                        message: 'Incentive history not found'.tr,
+                      ? (controller.isIncentiveLoading.value
+                      ? const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                      : SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Constant.showEmptyView(
+                          message: 'Incentive history not found'.tr,
+                        ),
                       ),
-                    ),
-                  )
+                    ))
                       : SliverPadding(
                     padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -346,58 +314,21 @@ class WalletScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  //   : SliverPadding(
-                  // padding: const EdgeInsets.symmetric(
-                  //     horizontal: 16, vertical: 8),
 
-                  // sliver: SliverList.separated(
-                  //   itemCount: controller.transactions.length,
-                  //   itemBuilder: (_, index) => _TransactionTile(
-                  //     model: controller.transactions[index],
-                  //     isDark: isDark,
-                  //   ),
-                  //   separatorBuilder: (_, __) => Padding(
-                  //     padding: const EdgeInsets.symmetric(vertical: 4),
-                  //     child: MySeparator(
-                  //       color: isDark
-                  //           ? AppThemeData.grey700
-                  //           : AppThemeData.grey200,
-                  //     ),
-                  //   ),
-                  // ),
-                //     SliverList.separated(
-                //       itemCount: controller.transactions.length +
-                //           (controller.isFetchingMore.value ? 1 : 0),
-                //
-                //       itemBuilder: (_, index) {
-                //         if (index == controller.transactions.length) {
-                //           return const Padding(
-                //             padding: EdgeInsets.symmetric(vertical: 16),
-                //             child: Center(child: CircularProgressIndicator()),
-                //           );
-                //         }
-                //
-                //         return _TransactionTile(
-                //           model: controller.transactions[index],
-                //           isDark: isDark,
-                //         );
-                //       },
-                //
-                //       separatorBuilder: (_, __) => Padding(
-                //         padding: const EdgeInsets.symmetric(vertical: 4),
-                //         child: MySeparator(
-                //           color: isDark
-                //               ? AppThemeData.grey700
-                //               : AppThemeData.grey200,
-                //         ),
-                //       ),
-                //     )
-                // ),
-
-                // ── Pagination Footer ───────────────────────────────────────
+                // ── Pagination Footer (tab-aware) ──────────────────────────
 
                 SliverToBoxAdapter(
                   child: Obx(() {
+                    if (controller.isIncentiveTab.value) {
+                      if (controller.isFetchingMoreIncentive.value) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }
+
                     if (controller.isFetchingMore.value) {
                       return const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
@@ -405,7 +336,8 @@ class WalletScreen extends StatelessWidget {
                       );
                     }
 
-                    if (!controller.hasMore.value && controller.transactions.isNotEmpty) {
+                    if (controller.transactions.isNotEmpty &&
+                        !controller.hasMore.value) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Center(
@@ -426,36 +358,6 @@ class WalletScreen extends StatelessWidget {
                     return const SizedBox.shrink();
                   }),
                 ),
-                // SliverToBoxAdapter(
-                //   child: Obx(() {
-                //     if (controller.isFetchingMore.value) {
-                //       return const Padding(
-                //         padding: EdgeInsets.symmetric(vertical: 16),
-                //         child: Center(child: CircularProgressIndicator()),
-                //       );
-                //     }
-                //     if (!controller.hasMore.value &&
-                //         controller.transactions.isNotEmpty) {
-                //       return Padding(
-                //         padding: const EdgeInsets.symmetric(vertical: 16),
-                //         child: Center(
-                //           child: Text(
-                //             'No more transactions'.tr,
-                //             style: TextStyle(
-                //               fontSize: 13,
-                //               fontFamily: AppThemeData.medium,
-                //               color: isDark
-                //                   ? AppThemeData.grey500
-                //                   : AppThemeData.grey400,
-                //             ),
-                //           ),
-                //         ),
-                //       );
-                //     }
-                //     return const SizedBox.shrink();
-                //   }),
-                // ),
-
                 // ── Bottom safe area ────────────────────────────────────────
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
@@ -647,6 +549,7 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isCredit = model.isTopup == true;
+    final date = model.date;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -700,11 +603,10 @@ class _TransactionTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  model.date == null
+                  date == null
                       ? '-'
-                      // : Constant.timestampToDateTime(model.date!),
-                     // : Constant.timestampToDateTime(model.date as Timestamp),
-                     : Constant.timestampToDateTime(Timestamp.fromDate(model.date!)),
+                      : Constant.timestampToDateTime(
+                      Timestamp.fromDate(date)),
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: AppThemeData.medium,
