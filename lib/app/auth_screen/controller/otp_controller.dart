@@ -15,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class OtpController extends GetxController {
   Rx<TextEditingController> otpController = TextEditingController().obs;
+  RxString enteredOtp = "".obs;
+  RxString refreshToken = "".obs;
 
   RxString countryCode = "".obs;
   RxString phoneNumber = "".obs;
@@ -102,12 +104,12 @@ class OtpController extends GetxController {
 
   /// Verifies the OTP and completes the full driver login flow (same as
   /// username/password login).
-  Future<void> verifyOTP() async {
+  Future<void> verifyOTP({String? otp}) async {
     if (isVerifying.value) return;
 
-    final otp = otpController.value.text.trim();
+    final code = otp ?? enteredOtp.value;
 
-    if (otp.length != 6) {
+    if (code.length != 6) {
       ShowToastDialog.showToast("Enter valid OTP".tr);
       return;
     }
@@ -158,9 +160,13 @@ class OtpController extends GetxController {
           response.statusCode < 300 &&
           responseData['jwt'] != null) {
         final jwt = responseData['jwt'].toString().trim();
+        final refreshTokenFromResp = responseData['refreshToken']?.toString().trim() ?? '';
         final verifiedUserType =
             responseData['userType']?.toString().trim().toUpperCase() ?? '';
         final userId = responseData['userId']?.toString().trim() ?? '';
+
+        // Save refresh token from response
+        refreshToken.value = refreshTokenFromResp;
 
         AppLogger.log('JWT received: ${jwt.isNotEmpty}', tag: 'Auth');
         AppLogger.log('userType: $verifiedUserType', tag: 'Auth');
@@ -191,22 +197,27 @@ class OtpController extends GetxController {
           prefs.setString('accessToken', jwt),
           prefs.setString('userId', userId),
           prefs.setString('firebase_id', userId),
-          prefs.setString('userEmail', phoneNumber.value),
-          prefs.setString('userRole', Constant.userRoleDriver),
           prefs.setString('userType', verifiedUserType),
-          prefs.setString('phoneNumber', phoneNumber.value),
-          prefs.setString('countryCode', countryCode.value),
           prefs.setBool('isLoggedIn', true),
+          prefs.setString('refreshToken', refreshToken.value),
         ]);
 
         // ------------------------------------------------------------
-        // Get FCM token
+        // Get FCM token and send it to the backend after login
         // ------------------------------------------------------------
 
         try {
           final fcmToken = await NotificationService.getToken();
           if (fcmToken != null && fcmToken.trim().isNotEmpty) {
             await prefs.setString('fcmToken', fcmToken.trim());
+
+            // Send FCM token to backend after login
+            final postedToken = await LoginController().postToken(
+              customerId: int.tryParse(userId) ?? 0,
+              fcmToken: fcmToken.trim(),
+            );
+
+            AppLogger.log('FCM token post result: $postedToken', tag: 'Auth');
           }
         } catch (e) {
           AppLogger.log('FCM token error: $e', tag: 'Auth');

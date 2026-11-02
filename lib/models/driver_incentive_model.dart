@@ -15,7 +15,7 @@ class DriverIncentiveModel {
     return DriverIncentiveModel(
       date: json['date'],
       driverId: json['driverId'],
-      noOfOrders: json['noOfOrders'],
+      noOfOrders: json['completedOrdersCount'],
       incentiveAmount:
       (json['incentiveAmount'] as num?)?.toDouble() ?? 0.0,
     );

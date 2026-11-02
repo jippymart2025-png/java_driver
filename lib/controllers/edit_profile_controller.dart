@@ -572,11 +572,11 @@ class EditProfileController extends GetxController {
       // GET ZONES
       // ----------------------------------------------------------
 
-      final zones = await FireStoreUtils.getZone();
+      // final zones = await FireStoreUtils.getZone();
 
-      if (zones != null) {
-        zoneList.assignAll(zones);
-      }
+      // if (zones != null) {
+      //   zoneList.assignAll(zones);
+      // }
 
       // ----------------------------------------------------------
       // GET USER ID

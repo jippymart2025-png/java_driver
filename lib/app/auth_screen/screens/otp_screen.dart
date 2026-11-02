@@ -188,11 +188,11 @@ class _OtpScreenState extends State<OtpScreen>
                           autoDismissKeyboard: true,
                           enableActiveFill: true,
                           cursorColor: AppThemeData.secondary300,
-                          controller: controller.otpController.value,
-                          onCompleted: (v) {
-                            HapticFeedback.mediumImpact();
-                            controller.verifyOTP();
-                          },
+onCompleted: (v) {
+                              HapticFeedback.mediumImpact();
+                              controller.enteredOtp.value = v;
+                              controller.verifyOTP(otp: v);
+                            },
                           hintCharacter: '–',
                           hintStyle: TextStyle(
                             color: isDark
@@ -359,7 +359,7 @@ class _OtpScreenState extends State<OtpScreen>
                   PrimaryButton(
                     isLoading: controller.isVerifying.value,
                     label: 'Verify & Continue'.tr,
-                    onTap: () => controller.verifyOTP(),
+                    onTap: () => controller.verifyOTP(otp: controller.enteredOtp.value),
                   ),
                 ],
               ),

@@ -1,10 +1,7 @@
-
-
-
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -16,6 +13,7 @@ import 'package:jippydriver_driver/app/verification_screen/screens/verification_
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
+import 'package:jippydriver_driver/services/safe_http_client.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:jippydriver_driver/utils/driver_location_sync.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
@@ -460,8 +458,19 @@ class LoginController extends GetxController {
           prefs.setBool('isLoggedIn', true),
         ]);
 
+        log('✅ Login successful');
+        log('✅ Driver ID: $userId');
+        log('✅ JWT saved');
+
         // ------------------------------------------------------------
-        // Get FCM token
+        // Save JWT to FlutterSecureStorage for getHeaders()
+        // ------------------------------------------------------------
+
+        await saveAuthToken(jwt);
+
+        // ------------------------------------------------------------
+        // Get FCM token and send it to the backend
+        // (must run after the JWT is saved so getHeaders() includes it)
         // ------------------------------------------------------------
 
         try {
@@ -472,20 +481,18 @@ class LoginController extends GetxController {
               'fcmToken',
               fcmToken.trim(),
             );
+
+            // Update FCM token on backend
+            final postedToken = await _postToken(
+              customerId: int.tryParse(userId) ?? 0,
+              fcmToken: fcmToken.trim(),
+            );
+
+            log('FCM token post result: $postedToken');
           }
         } catch (e) {
           log('FCM token error: $e');
         }
-
-        log('✅ Login successful');
-        log('✅ Driver ID: $userId');
-        log('✅ JWT saved');
-
-        // ------------------------------------------------------------
-        // Save JWT to FlutterSecureStorage for getHeaders()
-        // ------------------------------------------------------------
-
-        await saveAuthToken(jwt);
 
         // ------------------------------------------------------------
         // Fetch full driver details from getDriverDetails API
@@ -613,6 +620,12 @@ class LoginController extends GetxController {
           await NotificationService.getToken();
 
           await prefsSetFcmToken(userModel.fcmToken);
+
+          // Update FCM token on backend
+          await _postToken(
+            customerId: int.tryParse(userModel.id?.toString() ?? '') ?? 0,
+            fcmToken: userModel.fcmToken ?? '',
+          );
         } catch (e) {
           log('FCM token error: $e');
         }
@@ -836,4 +849,108 @@ class LoginController extends GetxController {
 
   // Keep singleton reference if needed elsewhere
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
-}
+
+  // FCM token submission metadata
+  final String _tag = 'FCM';
+  final String _deviceType = Platform.isAndroid ? 'ANDROID' : 'IOS';
+
+  /// Posts the device FCM token to the backend after login.
+  ///
+  /// Returns `true` when the backend accepted the token,
+  /// `false` when the request failed or was rejected.
+  Future<bool> _postToken({
+    required int customerId,
+    required String fcmToken,
+  }) async {
+    try {
+      final url = Uri.parse('${Constant.baseUrl}notification/device-token');
+      final response = await SafeHttpClient.safePost(
+        url,
+        headers: await getHeaders(),
+        body: json.encode({
+          'userId': customerId,
+          'userType': Constant.userRoleCustomer.toUpperCase(),
+          'deviceType': _deviceType,
+          'fcmToken': fcmToken,
+        }),
+        timeout: const Duration(seconds: 15),
+      );
+
+      if (response == null) {
+        log('$_tag no response (offline)');
+        return false;
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        log('$_tag HTTP ${response.statusCode}: ${response.body}');
+        return false;
+      }
+
+      try {
+        final decoded = json.decode(response.body);
+        if (decoded is Map<String, dynamic> && decoded['success'] == false) {
+          log('$_tag backend rejected: ${response.body}');
+          return false;
+        }
+      } catch (_) {
+        // Non-JSON success responses are fine.
+      }
+
+      return true;
+    } catch (e) {
+      log('$_tag error sending token: $e');
+      return false;
+    }
+  }
+
+  /// Public entry point so every login flow (password + OTP) can send the
+  /// FCM token once the user is authenticated.
+  Future<bool> postToken({
+    required int customerId,
+    required String fcmToken,
+  }) {
+    return _postToken(customerId: customerId, fcmToken: fcmToken);
+  }
+
+  Future<void> _refreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString('refreshToken');
+
+    if (refreshToken == null || refreshToken.isEmpty) {
+      log('No refresh token available');
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('${Constant.baseUrl}fm/auth/refresh'),
+        headers: await getHeaders(),
+        body: json.encode({
+          'refreshToken': refreshToken,
+        }),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final responseData = json.decode(response.body) as Map<String, dynamic>;
+        final newJwt = responseData['jwtToken']?.toString().trim() ?? '';
+        final newRefreshToken = responseData['refreshToken']?.toString().trim() ?? '';
+
+        if (newJwt.isNotEmpty) {
+          await prefs.setString('jwt', newJwt);
+          await saveAuthToken(newJwt);
+          if (newRefreshToken.isNotEmpty) {
+            await prefs.setString('refreshToken', newRefreshToken);
+          }
+          log('✅ Token refreshed successfully');
+        } else {
+          log('❌ Refresh response missing jwtToken');
+        }
+      } else {
+        log('❌ Token refresh failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      log('❌ Token refresh error: $e');
+    }
+  }
+
+  }

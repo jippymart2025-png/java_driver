@@ -1007,64 +1007,64 @@ class FireStoreUtils {
     }
   }
 
-  static Future<List<ZoneModel>?> getZone() async {
-    List<ZoneModel> zoneList = [];
-    try {
-      debugPrint("getZone ") ;
-      // Use HttpClientService with caching - zones rarely change (2 hours cache)
-      final httpClient = HttpClientService();
-      final response = await httpClient.get(
-        Uri.parse('${Constant.baseUrl}restaurant/zones'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        cacheStrategy: CacheStrategy.custom, // Custom TTL for zones
-        customTTL: const Duration(hours: 2), // Zones change rarely, cache for 2 hours
-        useCache: true,
-      );
-      debugPrint("getZone ${response.body}") ;
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
-
-        // Check if response is successful
-        if (responseData['success'] != true) {
-          debugPrint("API returned unsuccessful response");
-          return [];
-        }
-
-        // Get the data array
-        List<dynamic> zonesData = responseData['data'] ?? [];
-
-        debugPrint("Found ${zonesData.length} zones in API response");
-
-        for (var element in zonesData) {
-          try {
-            // Check if zone is published (handles both int and bool)
-            final publishValue = element['publish'];
-            final isPublished = publishValue == 1 || publishValue == true;
-
-            if (isPublished) {
-              ZoneModel zoneModel = ZoneModel.fromJson(element);
-              zoneList.add(zoneModel);
-              debugPrint("Added zone: ${zoneModel.name}");
-            }
-          } catch (e) {
-            debugPrint("Error parsing zone: $e");
-          }
-        }
-      } else {
-        debugPrint("Failed to load zones: ${response.statusCode}");
-        return [];
-      }
-    } catch (e, s) {
-      log('APIUtils.getZone $e $s');
-      return [];
-    }
-
-    debugPrint("Returning ${zoneList.length} zones");
-    return zoneList;
-  }
+  // static Future<List<ZoneModel>?> getZone() async {
+  //   List<ZoneModel> zoneList = [];
+  //   try {
+  //     debugPrint("getZone ") ;
+  //     // Use HttpClientService with caching - zones rarely change (2 hours cache)
+  //     final httpClient = HttpClientService();
+  //     final response = await httpClient.get(
+  //       Uri.parse('${Constant.baseUrl}restaurant/zones'),
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       cacheStrategy: CacheStrategy.custom, // Custom TTL for zones
+  //       customTTL: const Duration(hours: 2), // Zones change rarely, cache for 2 hours
+  //       useCache: true,
+  //     );
+  //     debugPrint("getZone ${response.body}") ;
+  //
+  //     if (response.statusCode == 200) {
+  //       final Map<String, dynamic> responseData = json.decode(response.body);
+  //
+  //       // Check if response is successful
+  //       if (responseData['success'] != true) {
+  //         debugPrint("API returned unsuccessful response");
+  //         return [];
+  //       }
+  //
+  //       // Get the data array
+  //       List<dynamic> zonesData = responseData['data'] ?? [];
+  //
+  //       debugPrint("Found ${zonesData.length} zones in API response");
+  //
+  //       for (var element in zonesData) {
+  //         try {
+  //           // Check if zone is published (handles both int and bool)
+  //           final publishValue = element['publish'];
+  //           final isPublished = publishValue == 1 || publishValue == true;
+  //
+  //           if (isPublished) {
+  //             ZoneModel zoneModel = ZoneModel.fromJson(element);
+  //             zoneList.add(zoneModel);
+  //             debugPrint("Added zone: ${zoneModel.name}");
+  //           }
+  //         } catch (e) {
+  //           debugPrint("Error parsing zone: $e");
+  //         }
+  //       }
+  //     } else {
+  //       debugPrint("Failed to load zones: ${response.statusCode}");
+  //       return [];
+  //     }
+  //   } catch (e, s) {
+  //     log('APIUtils.getZone $e $s');
+  //     return [];
+  //   }
+  //
+  //   debugPrint("Returning ${zoneList.length} zones");
+  //   return zoneList;
+  // }
   // static Future<WalletTransactionsApiResponse?> getWalletTransaction({
   //   int page = 1,
   //   int perPage = 10,
@@ -1169,11 +1169,7 @@ class FireStoreUtils {
 
       final httpClient = HttpClientService();
       final response = await httpClient.get(
-        Uri.parse('${Constant.baseUrl}driver-sql/wallet/delivery-records?driver_id=$driverId&page=$page&per_page=$perPage'),
-        //Uri.parse('http://187.127.156.147:8084/api/driver/insertOrUpdateDriverCodBalance'),
-
-        //headers: {'Content-Type': 'application/json', 'Accept': 'application/json',
-        //'Authorization':'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtdW5qYWNoYW5kYW5hQGdtYWlsLmNvbSIsInJvbGVzIjpbXSwidXNlcklkIjo3LCJpYXQiOjE3ODAwNjAzNTAsImV4cCI6MTc4MDE0Njc1MH0.4rij5DuY0iIigzBybMorrhjpxM5fOvkx34g0uXYtMQc'},
+        Uri.parse('${Constant.baseUrl}driver/insertOrUpdateDriverCodBalance'),
         cacheStrategy: CacheStrategy.custom,
         customTTL: const Duration(seconds: 25),
         useCache: !forceRefresh,

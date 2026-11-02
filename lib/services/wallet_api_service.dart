@@ -83,7 +83,7 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse(
-          '${Constant.baseUrl}driver/getDriverIncentiveHistory'
+          '${Constant.baseUrl}driver/incentive-settings/history'
               '?driverId=$driverId'
               '&filter=$filter'
               '&page=$page'

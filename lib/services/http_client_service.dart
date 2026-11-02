@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:jippydriver_driver/services/api_cache_service.dart';
+import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 
 /// HTTP Client Service with advanced optimizations
@@ -61,18 +62,42 @@ class HttpClientService {
     );
   }
   
-  /// Retry logic with exponential backoff
+/// Retry logic with exponential backoff
+  /// Also handles 403 errors by refreshing the token and retrying
   Future<http.Response> _retryRequest(
     Future<http.Response> Function() requestFn,
     int maxRetries,
     String urlString,
+    Map<String, String> headers,
   ) async {
     int attempt = 0;
     Exception? lastException;
     
     while (attempt < maxRetries) {
       try {
-        return await requestFn();
+        final response = await requestFn();
+        
+        // Handle 403: Refresh token and retry
+        if (response.statusCode == 403) {
+          AppLogger.log('🔄 Received 403, attempting token refresh...', tag: 'HTTP');
+          final refreshed = await refreshTokenOn403();
+          if (refreshed) {
+            // Update headers with new token
+            final newToken = await getAuthToken();
+            if (newToken != null && newToken.isNotEmpty &&
+                !newToken.startsWith('Bearer ')) {
+              headers['Authorization'] = 'Bearer $newToken';
+            } else if (newToken != null && newToken.isNotEmpty) {
+              headers['Authorization'] = newToken;
+            }
+            attempt++;
+            if (attempt < maxRetries) {
+              continue;
+            }
+          }
+        }
+        
+        return response;
       } on SocketException catch (e) {
         lastException = e;
         if (attempt < maxRetries - 1) {
@@ -119,7 +144,7 @@ class HttpClientService {
           break;
         }
       } catch (e) {
-        // Don't retry for other errors (4xx, 5xx status codes)
+        // Don't retry for other errors (4xx, 5xx status codes other than 403)
         rethrow;
       }
     }
@@ -225,6 +250,7 @@ class HttpClientService {
       },
       effectiveMaxRetries,
       urlString,
+      headers!,
     );
     
     // Register for deduplication (convert Response to Map for deduplication tracking)
@@ -349,6 +375,7 @@ class HttpClientService {
       },
       effectiveMaxRetries,
       urlString,
+      headers!,
     );
     
     // Register for deduplication (even though we don't cache POST responses)

@@ -207,9 +207,9 @@ class WalletScreen extends StatelessWidget {
                             onSelected: (_) async {
                               controller.incentiveFilter.value =
                               'CURRENT_MONTH';
-                              await controller.fetchIncentiveHistory(
-                                reset: true,
-                              );
+                              // await controller.fetchIncentiveHistory(
+                              //   reset: true,
+                              // );
                             },
                           ),
                         ],
