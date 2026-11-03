@@ -17,12 +17,14 @@ import 'package:jippydriver_driver/utils/driver_location_sync.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/notification_service.dart' show NotificationService, firebaseMessageBackgroundHandle;
 import 'package:jippydriver_driver/utils/preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'controllers/edit_profile_controller.dart';
 
@@ -72,11 +74,41 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 // Add this to your main function
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // CRITICAL: Register background message handler AFTER Firebase is
+  // initialized. The handler MUST be a top-level function annotated with
+  // @pragma('vm:entry-point') so it survives the engine snapshot, and it is
+  // invoked when the app is terminated or in background — this is what makes
+  // FCM order notifications appear while the driver is not looking at the app.
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Keep the stored FCM token fresh. When Firebase rotates the token, persist
+  // the new one so push notifications keep being delivered to this device.
+  FirebaseMessaging.instance.onTokenRefresh.listen((String token) async {
+    final newToken = token.trim();
+    if (newToken.isEmpty) return;
+    debugPrint('🔄 FCM token refreshed: $newToken');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final firebaseId =
+          (prefs.getString('firebase_id') ?? prefs.getString('userId') ?? '')
+              .trim();
+      if (firebaseId.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(firebaseId)
+            .set(<String, dynamic>{'fcmToken': newToken},
+                SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to persist refreshed FCM token: $e');
+    }
+  });
+
   await Preferences.initPref();
 
   // Restore cached terms & privacy so they're visible before getSettings runs

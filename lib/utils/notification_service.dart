@@ -5,11 +5,13 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:typed_data';
 import 'dart:io' show Platform;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:jippydriver_driver/firebase_options.dart';
 import 'package:jippydriver_driver/utils/preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/audio_player_service.dart' show AudioPlayerService;
 
@@ -153,7 +155,7 @@ class NotificationService {
       );
 
       log("✅ Background notification displayed: $title - $body");
-    } on Exception catch (e) {
+    } catch (e) {
       log("❌ Background notification error: $e");
     }
   }
@@ -191,6 +193,10 @@ class NotificationService {
         }
       }
 
+      // Keep the FCM token in sync — persist refreshed tokens to Firestore so
+      // push notifications keep reaching this device.
+      _listenForTokenRefresh();
+
       if (request.authorizationStatus == AuthorizationStatus.authorized ||
           request.authorizationStatus == AuthorizationStatus.provisional) {
         const AndroidInitializationSettings initializationSettingsAndroid =
@@ -216,6 +222,34 @@ class NotificationService {
     } catch (e) {
       log("❌ Error initializing notifications: $e");
     }
+  }
+
+  // Listen for FCM token rotations and persist the new token so notifications
+  // keep being delivered to this device.
+  StreamSubscription<String>? _tokenRefreshSub;
+
+  void _listenForTokenRefresh() {
+    _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((String token) async {
+      final newToken = token.trim();
+      if (newToken.isEmpty) return;
+      log("🔄 FCM token refreshed: $newToken");
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final firebaseId =
+            (prefs.getString('firebase_id') ?? prefs.getString('userId') ?? '')
+                .trim();
+        if (firebaseId.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(firebaseId)
+              .set(<String, dynamic>{'fcmToken': newToken},
+                  SetOptions(merge: true));
+        }
+      } catch (e) {
+        log("❌ Failed to persist refreshed FCM token: $e");
+      }
+    });
   }
 
   // Create notification channels for Android
@@ -353,7 +387,7 @@ class NotificationService {
         payload: jsonEncode(message.data),
       );
       log("✅ Foreground notification displayed: $title - $body");
-    } on Exception catch (e) {
+    } catch (e) {
       log("❌ Foreground notification error: $e");
     }
   }

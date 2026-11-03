@@ -2141,7 +2141,7 @@ class HomeController extends GetxController {
 
       final h   = HttpClientService();
       final res = await h.get(
-        Uri.parse('${Constant.baseUrl}driver/getDriverDetails?driverId=$userId'),
+        Uri.parse('${Constant.baseUrl}driver/getActiveOrderByDriverId?driverId=$userId'),
         headers: headers,
         cacheStrategy: CacheStrategy.driverProfile,
         useCache: true,
@@ -2379,10 +2379,12 @@ class HomeController extends GetxController {
           android: AndroidNotificationDetails(
             'order_channel',
             'Orders',
-            importance: Importance.high,
-            priority: Priority.high,
+            importance: Importance.max,
+            priority: Priority.max,
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound('order_ringtone'),
             enableVibration: true,
-            vibrationPattern: Int64List.fromList([500, 500, 500, 500]),
+            vibrationPattern: Int64List.fromList([1000, 1000, 1000, 1000]),
           ),
           iOS: const DarwinNotificationDetails(
               presentAlert: true,
