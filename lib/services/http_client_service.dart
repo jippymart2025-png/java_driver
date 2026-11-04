@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:jippydriver_driver/services/api_cache_service.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 
@@ -63,7 +64,7 @@ class HttpClientService {
   }
   
 /// Retry logic with exponential backoff
-  /// Also handles 403 errors by refreshing the token and retrying
+  /// Also handles 401/403 errors by refreshing the token and retrying
   Future<http.Response> _retryRequest(
     Future<http.Response> Function() requestFn,
     int maxRetries,
@@ -71,24 +72,27 @@ class HttpClientService {
     Map<String, String> headers,
   ) async {
     int attempt = 0;
+    bool tokenRefreshAttempted = false;
     Exception? lastException;
     
     while (attempt < maxRetries) {
       try {
         final response = await requestFn();
         
-        // Handle 403: Refresh token and retry
-        if (response.statusCode == 403) {
-          AppLogger.log('🔄 Received 403, attempting token refresh...', tag: 'HTTP');
-          final refreshed = await refreshTokenOn403();
+        // Handle 401/403: refresh the token once, then retry with the new one
+        if (AuthHttpClient.isUnauthorized(response.statusCode) &&
+            !tokenRefreshAttempted) {
+          tokenRefreshAttempted = true;
+          AppLogger.log(
+            '🔄 Received ${response.statusCode}, attempting token refresh...',
+            tag: 'HTTP',
+          );
+          final refreshed = await refreshAuthToken();
           if (refreshed) {
             // Update headers with new token
             final newToken = await getAuthToken();
-            if (newToken != null && newToken.isNotEmpty &&
-                !newToken.startsWith('Bearer ')) {
-              headers['Authorization'] = 'Bearer $newToken';
-            } else if (newToken != null && newToken.isNotEmpty) {
-              headers['Authorization'] = newToken;
+            if (newToken != null && newToken.isNotEmpty) {
+              headers['Authorization'] = formatAuthToken(newToken);
             }
             attempt++;
             if (attempt < maxRetries) {
@@ -144,7 +148,7 @@ class HttpClientService {
           break;
         }
       } catch (e) {
-        // Don't retry for other errors (4xx, 5xx status codes other than 403)
+        // Don't retry for other errors (4xx, 5xx status codes other than 401/403)
         rethrow;
       }
     }
@@ -190,10 +194,14 @@ class HttpClientService {
     final startTime = DateTime.now();
     final effectiveTimeout = timeout ?? _defaultTimeout;
     final effectiveMaxRetries = maxRetries ?? (enableRetry ? _maxRetries : 0);
+
+    // Ensure the request carries the currently stored access token so a
+    // 401/403 can be recovered by refreshing it.
+    final requestHeaders = await _withAuthHeaders(headers);
     
     // Check for pending duplicate request
     if (useCache && !forceRefresh) {
-      final pendingRequest = _cacheService.getPendingRequest(urlString, headers);
+      final pendingRequest = _cacheService.getPendingRequest(urlString, requestHeaders);
       if (pendingRequest != null) {
         AppLogger.log('⏳ Request deduplication: Waiting for pending request to: $urlString', tag: 'HTTP');
         try {
@@ -209,7 +217,7 @@ class HttpClientService {
       if (!forceRefresh) {
         final cachedData = await _cacheService.getCached(
           urlString,
-          headers,
+          requestHeaders,
           strategy: cacheStrategy,
           customTTL: customTTL,
         );
@@ -225,7 +233,7 @@ class HttpClientService {
     }
     
     // Interceptor: Log request
-    _logRequest('GET', url, headers: headers);
+    _logRequest('GET', url, headers: requestHeaders);
     
     // Create request future with timeout and retry
     Future<http.Response> requestFuture = _retryRequest(
@@ -236,7 +244,7 @@ class HttpClientService {
         }
         
         // Make HTTP request with timeout
-        final response = await _makeHttpRequest(url, headers).timeout(
+        final response = await _makeHttpRequest(url, requestHeaders).timeout(
           effectiveTimeout,
           onTimeout: () {
             throw TimeoutException('Request timeout after ${effectiveTimeout.inSeconds}s', effectiveTimeout);
@@ -250,14 +258,14 @@ class HttpClientService {
       },
       effectiveMaxRetries,
       urlString,
-      headers!,
+      requestHeaders,
     );
     
     // Register for deduplication (convert Response to Map for deduplication tracking)
     if (useCache) {
       _cacheService.registerPendingRequest(
         urlString,
-        headers,
+        requestHeaders,
         requestFuture.then((response) {
           if (response.statusCode == 200) {
             return jsonDecode(response.body) as Map<String, dynamic>;
@@ -288,7 +296,7 @@ class HttpClientService {
           
           await _cacheService.saveCache(
             urlString,
-            headers,
+            requestHeaders,
             responseBody,
             strategy: cacheStrategy,
             customTTL: customTTL,
@@ -311,6 +319,21 @@ class HttpClientService {
     }
   }
   
+  /// Returns [headers] with the stored access token added when the caller did
+  /// not provide an `Authorization` header.
+  Future<Map<String, String>> _withAuthHeaders(
+    Map<String, String>? headers,
+  ) async {
+    final merged = <String, String>{...?headers};
+    if ((merged['Authorization'] ?? '').trim().isEmpty) {
+      final token = await getAuthToken();
+      if (token != null && token.isNotEmpty) {
+        merged['Authorization'] = formatAuthToken(token);
+      }
+    }
+    return merged;
+  }
+
   /// Internal method to make HTTP request using optimized client
   Future<http.Response> _makeHttpRequest(
     Uri url,
@@ -335,10 +358,14 @@ class HttpClientService {
     final startTime = DateTime.now();
     final effectiveTimeout = timeout ?? _defaultTimeout;
     final effectiveMaxRetries = maxRetries ?? (enableRetry ? _maxRetries : 0);
+
+    // Ensure the request carries the currently stored access token so a
+    // 401/403 can be recovered by refreshing it.
+    final requestHeaders = await _withAuthHeaders(headers);
     
     // Check for pending duplicate request
     if (useDeduplication) {
-      final pendingRequest = _cacheService.getPendingRequest(urlString, headers);
+      final pendingRequest = _cacheService.getPendingRequest(urlString, requestHeaders);
       if (pendingRequest != null) {
         AppLogger.log('⏳ Request deduplication: Waiting for pending POST request to: $urlString', tag: 'HTTP');
         try {
@@ -351,14 +378,14 @@ class HttpClientService {
     }
     
     // Interceptor: Log request
-    _logRequest('POST', url, headers: headers);
+    _logRequest('POST', url, headers: requestHeaders);
     
     // Make request with retry and timeout
     final response = await _retryRequest(
       () async {
         final response = await _httpClient.post(
           url,
-          headers: headers,
+          headers: requestHeaders,
           body: body,
           encoding: encoding,
         ).timeout(
@@ -375,7 +402,7 @@ class HttpClientService {
       },
       effectiveMaxRetries,
       urlString,
-      headers!,
+      requestHeaders,
     );
     
     // Register for deduplication (even though we don't cache POST responses)
@@ -383,7 +410,7 @@ class HttpClientService {
       try {
         _cacheService.registerPendingRequest(
           urlString,
-          headers,
+          requestHeaders,
           Future.value(jsonDecode(response.body) as Map<String, dynamic>),
         );
       } catch (e) {

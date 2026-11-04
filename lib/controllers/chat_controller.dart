@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/send_notification.dart';
 import 'package:jippydriver_driver/models/conversation_model.dart';
@@ -12,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 // class ChatController extends GetxController {
 //   Rx<TextEditingController> messageController = TextEditingController().obs;
@@ -164,7 +164,7 @@ class ChatController extends GetxController {
       isLoading(true);
       final url = Uri.parse("${Constant.baseUrl}chat/$orderId");
 
-      final response = await http.post(url, body:{
+      final response = await AuthHttpClient().post(url, body:{
         "chat_type": chatType.value
       });
 

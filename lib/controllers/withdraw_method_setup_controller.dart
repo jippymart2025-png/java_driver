@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/payment_model/flutter_wave_model.dart';
 import 'package:jippydriver_driver/models/payment_model/paypal_model.dart';
@@ -11,6 +10,7 @@ import 'package:jippydriver_driver/models/payment_model/stripe_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/models/withdraw_method_model.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class WithdrawMethodSetupController extends GetxController {
   // ── Text controllers ─────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ class WithdrawMethodSetupController extends GetxController {
 
       final uri = Uri.parse("${Constant.baseUrl}settings/payment");
       final response =
-      await http.get(uri).timeout(const Duration(seconds: 10));
+      await AuthHttpClient().get(uri);
 
       if (response.statusCode == 200) {
         final json =

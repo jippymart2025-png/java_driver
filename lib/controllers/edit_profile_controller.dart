@@ -487,7 +487,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
-import '../utils/common.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 import '../app/dash_board_screen/controller/dash_board_controller.dart';
 
 class EditProfileController extends GetxController {
@@ -814,78 +814,33 @@ class EditProfileController extends GetxController {
       debugPrint("API URL: $url");
 
       // ----------------------------------------------------------
-      // CREATE MULTIPART REQUEST
+      // MULTIPART REQUEST (auto-refreshes token on 401/403)
       // ----------------------------------------------------------
 
-      final request = http.MultipartRequest(
-        "POST",
-        url,
-      );
+      final response = await AuthHttpClient.sendMultipartWithRefresh(
+        timeout: const Duration(seconds: 60),
+        buildRequest: () async {
+          final request = http.MultipartRequest(
+            "POST",
+            url,
+          );
 
-      // ----------------------------------------------------------
-      // HEADERS
-      // ----------------------------------------------------------
+          request.fields["userId"] = userId;
+          request.fields["profilePicUrl"] = "";
+          request.fields["userType"] = "DRIVER";
 
-      final headers = await getHeaders();
+          final multipartFile =
+          await http.MultipartFile.fromPath(
+            "profilePicFile",
+            imageFile.path,
+          );
 
-      request.headers.addAll(headers);
+          request.files.add(
+            multipartFile,
+          );
 
-      debugPrint("Headers: ${request.headers}");
-
-      // ----------------------------------------------------------
-      // FORM FIELDS
-      // ----------------------------------------------------------
-
-      request.fields["userId"] = userId;
-
-      request.fields["profilePicUrl"] = "";
-
-      request.fields["userType"] = "DRIVER";
-
-      // ----------------------------------------------------------
-      // IMAGE FILE
-      // ----------------------------------------------------------
-
-      final multipartFile =
-      await http.MultipartFile.fromPath(
-        "profilePicFile",
-        imageFile.path,
-      );
-
-      request.files.add(
-        multipartFile,
-      );
-
-      // ----------------------------------------------------------
-      // DEBUG
-      // ----------------------------------------------------------
-
-      debugPrint("====================================");
-      debugPrint("Multipart fields:");
-      debugPrint("${request.fields}");
-
-      debugPrint("Multipart files:");
-      debugPrint("${request.files}");
-      debugPrint("====================================");
-
-      // ----------------------------------------------------------
-      // SEND REQUEST
-      // ----------------------------------------------------------
-
-      debugPrint(
-        "Sending profile image request...",
-      );
-
-      final streamedResponse =
-      await request.send();
-
-      // ----------------------------------------------------------
-      // CONVERT RESPONSE
-      // ----------------------------------------------------------
-
-      final response =
-      await http.Response.fromStream(
-        streamedResponse,
+          return request;
+        },
       );
 
       debugPrint("====================================");

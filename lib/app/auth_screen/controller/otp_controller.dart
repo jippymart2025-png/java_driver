@@ -12,6 +12,7 @@ import 'package:jippydriver_driver/utils/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class OtpController extends GetxController {
   Rx<TextEditingController> otpController = TextEditingController().obs;
@@ -199,8 +200,14 @@ class OtpController extends GetxController {
           prefs.setString('firebase_id', userId),
           prefs.setString('userType', verifiedUserType),
           prefs.setBool('isLoggedIn', true),
-          prefs.setString('refreshToken', refreshToken.value),
+          if (refreshTokenFromResp.isNotEmpty)
+            prefs.setString('refreshToken', refreshTokenFromResp),
         ]);
+
+        await saveRefreshTokenResponse(
+          accessToken: jwt,
+          refreshToken: refreshTokenFromResp,
+        );
 
         // ------------------------------------------------------------
         // Get FCM token and send it to the backend after login
@@ -227,17 +234,11 @@ class OtpController extends GetxController {
         AppLogger.log('✅ Driver ID: $userId', tag: 'Auth');
 
         // ------------------------------------------------------------
-        // Save JWT to FlutterSecureStorage for getHeaders()
-        // ------------------------------------------------------------
-
-        await saveAuthToken(jwt);
-
-        // ------------------------------------------------------------
         // Fetch full driver details from getDriverDetails API
         // ------------------------------------------------------------
 
         try {
-          final driverResponse = await http.get(
+          final driverResponse = await AuthHttpClient().get(
             Uri.parse(
               '${Constant.baseUrl}driver/getDriverDetails?driverId=$userId',
             ),

@@ -3,7 +3,6 @@ import 'dart:developer';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/app/auth_screen/screens/login_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
@@ -20,6 +19,7 @@ import 'package:jippydriver_driver/models/city_model.dart';
 import 'package:jippydriver_driver/models/area_model.dart';
 import 'package:jippydriver_driver/app/dash_board_screen/screens/dash_board_screen.dart';
 import 'package:jippydriver_driver/app/verification_screen/screens/verification_screen.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 /// OPTIMIZATIONS:
 /// 1. validateAndSignup() — all validation lives in the controller, not the view.
 /// 2. signUpWithEmailAndPassword: unified null-safety with ?. and ?? operators.
@@ -383,7 +383,7 @@ final selectedState = Rxn<StateModel>();
 
   Future<void> fetchStates() async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse(
           '${Constant.baseUrl}fm/location/fetchStates',
         ),
@@ -407,7 +407,7 @@ final selectedState = Rxn<StateModel>();
   //--------FETCH CITIES---------
   Future<void> fetchCities(int stateId) async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse(
           '${Constant.baseUrl}fm/location/fetchCityInState?stateId=$stateId',
         ),
@@ -435,7 +435,7 @@ final selectedState = Rxn<StateModel>();
   //---------FETCH AREAS------------
   Future<void> fetchAreas(int cityId) async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse(
           '${Constant.baseUrl}fm/location/fetchAreaInCity?cityId=$cityId',
         ),
@@ -564,7 +564,7 @@ final selectedState = Rxn<StateModel>();
 
       log('Signup API URL: $url');
 
-      final response = await http
+      final response = await AuthHttpClient()
           .post(
         url,
         headers: await getHeaders(),
@@ -675,7 +675,7 @@ final selectedState = Rxn<StateModel>();
       // );
       final driverId = payload['id'];
 
-      final response = await http.put(
+      final response = await AuthHttpClient().put(
         Uri.parse(
           '${Constant.baseUrl}driver/updateDriverDetails?driverId=$driverId',
         ),

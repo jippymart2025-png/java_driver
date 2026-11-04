@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/language_model.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
@@ -8,6 +7,7 @@ import 'package:jippydriver_driver/utils/preferences.dart';
 import 'package:get/get.dart';
 
 import '../constant/collection_name.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class ChangeLanguageController extends GetxController {
   Rx<LanguageModel> selectedLanguage = LanguageModel().obs;
@@ -23,7 +23,7 @@ class ChangeLanguageController extends GetxController {
   getLanguage() async {
     try {
       isLoading.value = true;
-      final response = await http.get(Uri.parse("${Constant.baseUrl}settings/languages"));
+      final response = await AuthHttpClient().get(Uri.parse("${Constant.baseUrl}settings/languages"));
       if (response.statusCode == 200) {
         final Map<String, dynamic> res = json.decode(response.body);
 

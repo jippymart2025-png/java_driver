@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/preferences.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class TermsAndConditionScreen extends StatefulWidget {
   final String? type;
@@ -180,10 +180,11 @@ class _TermsAndConditionScreenState extends State<TermsAndConditionScreen> {
           '${Constant.baseUrl}fm/terms-and-conditions/'
           'getTermsAndConditionsForAppType?appType=${Constant.userRoleDriver}&appPolicyType=$appPolicyType',
         );
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           uri,
-          headers: await getHeaders()
-        ).timeout(const Duration(seconds: 10));
+          headers: await getHeaders(),
+          timeout: const Duration(seconds: 10),
+        );
 
         if (response.statusCode == 200) {
           // Clean invalid chars and surrogate pairs before decoding

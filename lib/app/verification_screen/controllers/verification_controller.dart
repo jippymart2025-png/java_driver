@@ -12,7 +12,7 @@ import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
 import 'package:jippydriver_driver/models/document_model.dart';
 import 'package:jippydriver_driver/models/driver_document_model.dart';
-import 'package:jippydriver_driver/utils/common.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 
 class VerificationController extends GetxController {
@@ -499,30 +499,30 @@ class VerificationController extends GetxController {
     update();
 
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(_profilePicUrl),
+      final response = await AuthHttpClient.sendMultipartWithRefresh(
+        timeout: _httpTimeout,
+        buildRequest: () async {
+          final request = http.MultipartRequest(
+            'POST',
+            Uri.parse(_profilePicUrl),
+          );
+
+          request.fields['userId'] = driverId;
+          request.fields['userType'] = 'driver';
+          request.fields['profilePicUrl'] = '';
+
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'profilePicFile',
+              file.path,
+            ),
+          );
+
+          request.headers['accept'] = '*/*';
+
+          return request;
+        },
       );
-
-      request.fields['userId'] = driverId;
-      request.fields['userType'] = 'driver';
-      request.fields['profilePicUrl'] = '';
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'profilePicFile',
-          file.path,
-        ),
-      );
-
-      final token = await getAuthToken();
-      request.headers.addAll({
-        'accept': '*/*',
-        if (token != null && token.isNotEmpty) 'Authorization': token,
-      });
-
-      final streamedResponse = await request.send().timeout(_httpTimeout);
-      final response = await http.Response.fromStream(streamedResponse);
 
       debugPrint(
         'Profile pic upload status: ${response.statusCode}',
@@ -666,79 +666,50 @@ class VerificationController extends GetxController {
       debugPrint('========================================');
 
       // -----------------------------------------------------------------------
-      // Multipart request
+      // Multipart request (auto-refreshes token on 401/403)
       // -----------------------------------------------------------------------
 
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(_uploadDocumentsUrl),
-      );
+      final response = await AuthHttpClient.sendMultipartWithRefresh(
+        timeout: _httpTimeout,
+        buildRequest: () async {
+          final request = http.MultipartRequest(
+            'POST',
+            Uri.parse(_uploadDocumentsUrl),
+          );
 
-      // -----------------------------------------------------------------------
-      // Form fields
-      // -----------------------------------------------------------------------
+          request.fields['entityId'] = driverId.toString();
+          request.fields['entityType'] = 'driver';
 
-      request.fields['entityId'] = driverId.toString();
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'aadharFile',
+              aadharFile.value!.path,
+            ),
+          );
 
-      request.fields['entityType'] = 'driver';
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'panFile',
+              panFile.value!.path,
+            ),
+          );
 
-      // -----------------------------------------------------------------------
-      // Aadhaar
-      // -----------------------------------------------------------------------
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'rcCopyFile',
+              rcCopyFile.value!.path,
+            ),
+          );
 
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'aadharFile',
-          aadharFile.value!.path,
-        ),
-      );
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'drivingLicenseFile',
+              drivingLicenseFile.value!.path,
+            ),
+          );
 
-      // -----------------------------------------------------------------------
-      // PAN
-      // -----------------------------------------------------------------------
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'panFile',
-          panFile.value!.path,
-        ),
-      );
-
-      // -----------------------------------------------------------------------
-      // RC Copy
-      // -----------------------------------------------------------------------
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'rcCopyFile',
-          rcCopyFile.value!.path,
-        ),
-      );
-
-      // -----------------------------------------------------------------------
-      // Driving License
-      // -----------------------------------------------------------------------
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'drivingLicenseFile',
-          drivingLicenseFile.value!.path,
-        ),
-      );
-
-
-
-      request.headers.addAll(await getHeaders());
-      // -----------------------------------------------------------------------
-      // Send request
-      // -----------------------------------------------------------------------
-
-      final streamedResponse = await request.send().timeout(
-        _httpTimeout,
-      );
-
-      final response = await http.Response.fromStream(
-        streamedResponse,
+          return request;
+        },
       );
 
       debugPrint(

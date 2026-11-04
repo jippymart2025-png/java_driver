@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/app/chat_screens/chat_screen.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
@@ -13,6 +12,7 @@ import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:jippydriver_driver/utils/network_image_widget.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:provider/provider.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class DriverInboxScreen extends StatelessWidget {
   const DriverInboxScreen({super.key});
@@ -20,7 +20,7 @@ class DriverInboxScreen extends StatelessWidget {
   Future<List<InboxModel>> fetchChats() async {
     final restaurantId = FireStoreUtils.getCurrentUid();
     final url = Uri.parse('${Constant.baseUrl}get-chats?restaurant_id=$restaurantId');
-    final response = await http.get(url);
+    final response = await AuthHttpClient().get(url);
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);

@@ -26,6 +26,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../utils/common.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 /// OPTIMIZATIONS:
 /// 1. Added validateAndLogin() — separates UI validation from business logic.
@@ -447,6 +448,11 @@ class LoginController extends GetxController {
 
         final prefs = await SharedPreferences.getInstance();
 
+        final refreshTokenFromResp =
+            responseData['refreshToken']?.toString().trim() ??
+                responseData['refresh_token']?.toString().trim() ??
+                '';
+
         await Future.wait([
           prefs.setString('jwt', jwt),
           prefs.setString('accessToken', jwt),
@@ -456,6 +462,8 @@ class LoginController extends GetxController {
           prefs.setString('userRole', Constant.userRoleDriver),
           prefs.setString('userType', userType),
           prefs.setBool('isLoggedIn', true),
+          if (refreshTokenFromResp.isNotEmpty)
+            prefs.setString('refreshToken', refreshTokenFromResp),
         ]);
 
         log('✅ Login successful');
@@ -463,10 +471,14 @@ class LoginController extends GetxController {
         log('✅ JWT saved');
 
         // ------------------------------------------------------------
-        // Save JWT to FlutterSecureStorage for getHeaders()
+        // Save JWT (+ refresh token, when returned) so getHeaders()
+        // and future token refreshes work across restarts.
         // ------------------------------------------------------------
 
-        await saveAuthToken(jwt);
+        await saveRefreshTokenResponse(
+          accessToken: jwt,
+          refreshToken: refreshTokenFromResp,
+        );
 
         // ------------------------------------------------------------
         // Get FCM token and send it to the backend
@@ -499,7 +511,7 @@ class LoginController extends GetxController {
         // ------------------------------------------------------------
 
         try {
-          final driverResponse = await http.get(
+          final driverResponse = await AuthHttpClient().get(
             Uri.parse(
               '${Constant.baseUrl}driver/getDriverDetails?driverId=$userId',
             ),
@@ -834,6 +846,15 @@ class LoginController extends GetxController {
       ];
 
       await Future.wait(keysToRemove.map(prefs.remove));
+      await Future.wait([
+        clearAuthToken(),
+        prefs.remove('jwt'),
+        prefs.remove('accessToken'),
+        prefs.remove('refreshToken'),
+        prefs.remove('refreshTokenType'),
+        prefs.remove('accessTokenIssuedAt'),
+        prefs.remove('refreshTokenResponse'),
+      ]);
       Get.offAll(const LoginScreen());
       log('✅ All user data cleared from SharedPreferences');
     } catch (e) {
@@ -869,7 +890,7 @@ class LoginController extends GetxController {
         headers: await getHeaders(),
         body: json.encode({
           'userId': customerId,
-          'userType': Constant.userRoleCustomer.toUpperCase(),
+          'userType': Constant.userRoleDriver.toUpperCase(),
           'deviceType': _deviceType,
           'fcmToken': fcmToken,
         }),
@@ -912,45 +933,11 @@ class LoginController extends GetxController {
     return _postToken(customerId: customerId, fcmToken: fcmToken);
   }
 
+  /// Delegates to the shared refresh-token flow in `utils/common.dart`, which
+  /// calls `fm/auth/refresh`, stores the returned access/refresh tokens, and
+  /// is also used automatically by the HTTP clients on 401/403 responses.
   Future<void> _refreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString('refreshToken');
-
-    if (refreshToken == null || refreshToken.isEmpty) {
-      log('No refresh token available');
-      return;
-    }
-
-    try {
-      final response = await http.post(
-        Uri.parse('${Constant.baseUrl}fm/auth/refresh'),
-        headers: await getHeaders(),
-        body: json.encode({
-          'refreshToken': refreshToken,
-        }),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final responseData = json.decode(response.body) as Map<String, dynamic>;
-        final newJwt = responseData['jwtToken']?.toString().trim() ?? '';
-        final newRefreshToken = responseData['refreshToken']?.toString().trim() ?? '';
-
-        if (newJwt.isNotEmpty) {
-          await prefs.setString('jwt', newJwt);
-          await saveAuthToken(newJwt);
-          if (newRefreshToken.isNotEmpty) {
-            await prefs.setString('refreshToken', newRefreshToken);
-          }
-          log('✅ Token refreshed successfully');
-        } else {
-          log('❌ Refresh response missing jwtToken');
-        }
-      } else {
-        log('❌ Token refresh failed: ${response.statusCode}');
-      }
-    } catch (e) {
-      log('❌ Token refresh error: $e');
-    }
+    await refreshAuthToken();
   }
 
   }

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:developer';
 
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/app/home_screen/controller/home_controller.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/send_notification.dart';
@@ -13,6 +12,7 @@ import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class DeliverOrderController extends GetxController {
   RxBool isLoading = true.obs;
@@ -71,7 +71,7 @@ class DeliverOrderController extends GetxController {
         return 0;
       }
       final driverID = Constant.userModel!.id.toString();
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}orders/completed/today/$driverID'),
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ class DeliverOrderController extends GetxController {
 
   Future<Map<String, dynamic>?> getZoneBonusByZoneId(String zoneId) async {
     try {
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
         Uri.parse("${Constant.baseUrl}zone/bonus/byZoneId"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"zone_id": zoneId}),
@@ -172,7 +172,7 @@ class DeliverOrderController extends GetxController {
     debugPrint("[ToPay] Fetching ToPay for order: $orderId");
 
     try {
-      final response = await http.get(url).timeout(Duration(seconds: 10));
+      final response = await AuthHttpClient().get(url);
 
       // Check if response is successful
       if (response.statusCode == 200) {
@@ -472,8 +472,7 @@ void _showWalletUpdatedPopup() {
 // // ============================================================
 //
 // import 'dart:convert';
-// import 'package:http/http.dart' as http;
-// import 'package:cloud_firestore/cloud_firestore.dart';
+// // import 'package:cloud_firestore/cloud_firestore.dart';
 // import 'package:get/get.dart';
 // import 'package:flutter/material.dart';
 //

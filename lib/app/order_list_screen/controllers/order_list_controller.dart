@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:developer';
 
 import 'package:flutter/cupertino.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/orders_report_response_model.dart';
@@ -14,6 +13,7 @@ import 'package:jippydriver_driver/models/vendor_model.dart';
 import 'dart:async';
 
 import 'package:jippydriver_driver/utils/common.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 /// Report tabs map to `ordersReport` query `type`: upcoming / settled, or omitted for all.
 enum OrderListTab { upcoming, settled, all }
@@ -85,7 +85,7 @@ class OrderListController extends GetxController {
 
     try {
       isLoading.value = true;
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse(
           '${Constant.baseUrl}driver/fetchOrderEarningsHistory?driverId=${Constant.userModel?.firebaseId}',
         ),
@@ -164,7 +164,7 @@ class OrderListController extends GetxController {
     try {
       isLoading.value = true;
       debugPrint("BEFORE API");
-      final response = await http
+      final response = await AuthHttpClient()
           .get(
         Uri.parse(
           '${Constant.baseUrl}driver/fetchTotalEarnings?driverId=${Constant.userModel?.firebaseId}',
@@ -341,9 +341,12 @@ class OrderListController extends GetxController {
         "GET ORDER URL => ${_buildOrdersUrl(tab: tabForRequest, page: 1)}",
       );
 
-      final response = await http
-          .get(_buildOrdersUrl(tab: tabForRequest, page: 1), headers: await getHeaders())
-          .timeout(const Duration(seconds: 15));
+      final response = await AuthHttpClient()
+          .get(
+        _buildOrdersUrl(tab: tabForRequest, page: 1),
+        headers: await getHeaders(),
+        timeout: const Duration(seconds: 15),
+      );
 
       if (_activeTab != tabForRequest) return;
 
@@ -383,9 +386,12 @@ class OrderListController extends GetxController {
       isLoadingMore.value = true;
       final nextPage = _currentPage + 1;
 
-      final response = await http
-          .get(_buildOrdersUrl(tab: tabForRequest, page: nextPage), headers: await getHeaders())
-          .timeout(const Duration(seconds: 15));
+      final response = await AuthHttpClient()
+          .get(
+        _buildOrdersUrl(tab: tabForRequest, page: nextPage),
+        headers: await getHeaders(),
+        timeout: const Duration(seconds: 15),
+      );
 
       if (_activeTab != tabForRequest) return;
 

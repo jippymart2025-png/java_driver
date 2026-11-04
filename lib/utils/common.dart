@@ -48,32 +48,98 @@ Future<void> clearAuthToken() async {
   await storage.delete(key: 'api_token');
 }
 
+/// Keys used to persist the refresh-token API response inside the app.
+abstract class AuthTokenKeys {
+  static const String accessToken = 'jwt';
+  static const String legacyAccessToken = 'accessToken';
+  static const String refreshToken = 'refreshToken';
+  static const String refreshTokenType = 'refreshTokenType';
+  static const String accessTokenIssuedAt = 'accessTokenIssuedAt';
+  static const String rawRefreshResponse = 'refreshTokenResponse';
+}
+
+/// Stores every token returned by the refresh-token API.
+///
+/// Persists to secure storage (used by [getHeaders]) and to
+/// SharedPreferences (used across app launches) so a refreshed session
+/// survives restarts. The full raw refresh response is also stored under
+/// [AuthTokenKeys.rawRefreshResponse].
+Future<void> saveRefreshTokenResponse({
+  required String accessToken,
+  String? refreshToken,
+  String? tokenType,
+  String? rawResponse,
+}) async {
+  final access = accessToken.trim();
+  if (access.isEmpty) return;
+
+  final prefs = await SharedPreferences.getInstance();
+
+  await Future.wait([
+    saveAuthToken(access, tokenType: (tokenType ?? 'Bearer').trim()),
+    prefs.setString(AuthTokenKeys.accessToken, access),
+    prefs.setString(AuthTokenKeys.legacyAccessToken, access),
+    prefs.setString(
+      AuthTokenKeys.accessTokenIssuedAt,
+      DateTime.now().toIso8601String(),
+    ),
+    if (refreshToken != null && refreshToken.trim().isNotEmpty)
+      prefs.setString(AuthTokenKeys.refreshToken, refreshToken.trim()),
+    if (tokenType != null && tokenType.trim().isNotEmpty)
+      prefs.setString(AuthTokenKeys.refreshTokenType, tokenType.trim()),
+    if (rawResponse != null && rawResponse.trim().isNotEmpty)
+      prefs.setString(AuthTokenKeys.rawRefreshResponse, rawResponse.trim()),
+  ]);
+
+  logger.log('💾 Refresh token response saved (access + refresh token)');
+}
+
 /// Check if refresh token exists in SharedPreferences
 Future<bool> _hasRefreshToken() async {
   final prefs = await SharedPreferences.getInstance();
-  final refreshToken = prefs.getString('refreshToken');
+  final refreshToken = prefs.getString(AuthTokenKeys.refreshToken);
   return refreshToken != null && refreshToken.isNotEmpty;
 }
 
-/// Refresh token on 403 error
-/// Calls the refresh endpoint and saves new tokens
-/// Returns true if refresh was successful
-/// The refresh endpoint is called without the access token in headers
-/// since the access token may be expired (which is why we're refreshing).
-Future<bool> refreshTokenOn403() async {
-  final hasRefreshToken = await _hasRefreshToken();
-  if (!hasRefreshToken) {
-    logger.log('No refresh token available for 403 handling');
+Future<bool> _isLoggedIn() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('isLoggedIn') ?? false;
+}
+
+/// In-flight refresh request, shared so that a burst of parallel 401/403
+/// responses triggers only ONE call to the refresh endpoint.
+Future<bool>? _refreshInFlight;
+
+/// Refreshes the access token whenever any API answers `401` or `403`.
+///
+/// The refresh endpoint is called without the (expired) access token. The
+/// response is persisted through [saveRefreshTokenResponse] so the new access
+/// token and refresh token are stored in the app.
+///
+/// Returns `true` when a new access token was obtained and saved.
+Future<bool> refreshAuthToken() {
+  // Reuse an in-flight refresh instead of hitting the endpoint again.
+  return _refreshInFlight ??= _performRefresh().whenComplete(() {
+    _refreshInFlight = null;
+  });
+}
+
+Future<bool> _performRefresh() async {
+  if (!await _hasRefreshToken()) {
+    logger.log('No refresh token available for token refresh');
     return false;
   }
 
   final prefs = await SharedPreferences.getInstance();
-  final refreshToken = prefs.getString('refreshToken');
+  final refreshToken = prefs.getString(AuthTokenKeys.refreshToken);
 
   try {
     final response = await http.post(
       Uri.parse('${Constant.baseUrl}fm/auth/refresh'),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       body: json.encode({
         'refreshToken': refreshToken,
       }),
@@ -81,51 +147,97 @@ Future<bool> refreshTokenOn403() async {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final responseData = json.decode(response.body) as Map<String, dynamic>;
-      final newJwt = responseData['jwtToken']?.toString().trim() ?? '';
-      final newRefreshToken = responseData['refreshToken']?.toString().trim() ?? '';
+
+      // Backend may return the tokens at the top level or wrapped in `data`.
+      Map<String, dynamic> tokens = responseData;
+      if (responseData['data'] is Map) {
+        tokens = {
+          ...responseData,
+          ...Map<String, dynamic>.from(responseData['data'] as Map),
+        };
+      }
+
+      final newJwt = (tokens['jwtToken'] ??
+              tokens['jwt'] ??
+              tokens['accessToken'] ??
+              tokens['token'] ??
+              '')
+          .toString()
+          .trim();
+      final newRefreshToken =
+          (tokens['refreshToken'] ?? tokens['refresh_token'] ?? '')
+              .toString()
+              .trim();
+      final tokenType = tokens['tokenType']?.toString().trim();
 
       if (newJwt.isNotEmpty) {
-        await prefs.setString('jwt', newJwt);
-        await saveAuthToken(newJwt);
-        if (newRefreshToken.isNotEmpty) {
-          await prefs.setString('refreshToken', newRefreshToken);
-        }
-        logger.log('✅ Token refreshed successfully after 403');
+        await saveRefreshTokenResponse(
+          accessToken: newJwt,
+          refreshToken: newRefreshToken,
+          tokenType: tokenType,
+          rawResponse: response.body,
+        );
+        logger.log('✅ Token refreshed successfully');
         return true;
       } else {
-        logger.log('❌ Refresh response missing jwtToken');
+        logger.log('❌ Refresh response missing access token: ${response.body}');
       }
     } else {
-      logger.log('❌ Token refresh failed after 403: ${response.statusCode}');
+      logger.log('❌ Token refresh failed: ${response.statusCode}');
+      // The refresh token itself is invalid/expired - drop the session so the
+      // user is sent back to login instead of looping on 401s.
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        if (!await _isLoggedIn()) {
+          await _clearStoredTokens(prefs);
+        }
+      }
     }
   } catch (e) {
-    logger.log('❌ Token refresh error after 403: $e');
+    logger.log('❌ Token refresh error: $e');
   }
   return false;
 }
 
-/// Check response status and refresh token on 403
-/// Returns true if the response was a 403 and token refresh was attempted.
-/// Caller should retry the API call if this returns true and refresh was successful.
+Future<void> _clearStoredTokens(SharedPreferences prefs) async {
+  await Future.wait([
+    clearAuthToken(),
+    prefs.remove(AuthTokenKeys.accessToken),
+    prefs.remove(AuthTokenKeys.legacyAccessToken),
+    prefs.remove(AuthTokenKeys.refreshToken),
+    prefs.remove(AuthTokenKeys.refreshTokenType),
+    prefs.remove(AuthTokenKeys.accessTokenIssuedAt),
+    prefs.remove(AuthTokenKeys.rawRefreshResponse),
+  ]);
+}
+
+/// Backwards-compatible alias for [refreshAuthToken].
+Future<bool> refreshTokenOn403() => refreshAuthToken();
+
+/// Backwards-compatible alias: refreshes the token when the response is
+/// `401` / `403`. Returns `true` only when a refresh actually succeeded, in
+/// which case the caller should retry the API call.
 Future<bool> checkResponseAndRefreshOn403(http.Response response) async {
-  if (response.statusCode != 403) {
+  if (response.statusCode != 401 && response.statusCode != 403) {
     return false;
   }
 
-  logger.log('🔄 Received 403, attempting token refresh...', name: 'HTTP');
-  final refreshed = await refreshTokenOn403();
-  if (refreshed) {
-    logger.log('✅ Token refreshed successfully after 403', name: 'HTTP');
-    return true;
-  }
-  logger.log('❌ Token refresh failed after 403', name: 'HTTP');
-  return true; // Return true so caller knows 403 was encountered
+  logger.log(
+    '🔄 Received ${response.statusCode}, attempting token refresh...',
+    name: 'HTTP',
+  );
+  final refreshed = await refreshAuthToken();
+  logger.log(
+    refreshed
+        ? '✅ Token refreshed successfully'
+        : '❌ Token refresh failed',
+    name: 'HTTP',
+  );
+  return refreshed;
 }
 
 /// Common headers for all API calls
 Future<Map<String, String>> getHeaders() async {
   final token = await getAuthToken();
-  // final token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZXZhZG1pbiIsInJvbGVzIjpbIlJPTEVfREVWQURNSU4iXSwidXNlcklkIjo3NywiaWF0IjoxNzg3NzIyMDgxLCJleHAiOjE3ODc4MDg0ODF9.43xp9DxOfhc33vEpWpK_NU_KiG1aUeeklWt1cXXG3Is";
 
   return {
     'Content-Type': 'application/json',

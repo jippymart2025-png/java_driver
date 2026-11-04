@@ -32,6 +32,7 @@ import 'package:latlong2/latlong.dart' as location;
 import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:typed_data';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 // ---------------------------------------------------------------------------
 //  Lightweight cancel token
@@ -1417,10 +1418,12 @@ class HomeController extends GetxController {
 
   Future<double?> _fetchSurgeFee(String orderId) async {
     try {
-      final res = await http
-          .get(Uri.parse(
-          '${Constant.baseUrl}mobile/orders/$orderId/billing/surge-fee'))
-          .timeout(const Duration(seconds: 6));
+      final res = await AuthHttpClient().get(
+        Uri.parse(
+          '${Constant.baseUrl}mobile/orders/$orderId/billing/surge-fee',
+        ),
+        timeout: const Duration(seconds: 6),
+      );
       if (res.statusCode == 200) {
         final j = jsonDecode(res.body);
         if (j['success'] == true) {
@@ -1434,10 +1437,12 @@ class HomeController extends GetxController {
 
   Future<double?> _fetchToPay(String orderId) async {
     try {
-      final res = await http
-          .get(Uri.parse(
-          '${Constant.baseUrl}mobile/orders/$orderId/billing/to-pay'))
-          .timeout(const Duration(seconds: 6));
+      final res = await AuthHttpClient().get(
+        Uri.parse(
+          '${Constant.baseUrl}mobile/orders/$orderId/billing/to-pay',
+        ),
+        timeout: const Duration(seconds: 6),
+      );
       if (res.statusCode == 200) {
         final j = jsonDecode(res.body);
         if (j['success'] == true && j['data']?['found'] == true) {

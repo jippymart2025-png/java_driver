@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/services/api_cache_service.dart';
 import 'package:jippydriver_driver/app/chat_screens/ChatVideoContainer.dart';
@@ -37,6 +36,7 @@ import 'package:jippydriver_driver/utils/preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_compress/video_compress.dart';
 import '../models/driver_earning_history_model.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class FireStoreUtils {
   /// Strips invalid UTF-16 surrogate/control chars so [json.decode] won't throw.
@@ -289,7 +289,7 @@ class FireStoreUtils {
       };
       debugPrint("updateUserWalletHomeScreen ${bodys} ");
       debugPrint("updateUserWalletHomeScreen ${amount} ");
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
         Uri.parse('${Constant.baseUrl}driver-sql/delivery-amount/update'),
         headers: {
           'Content-Type': 'application/json',
@@ -314,7 +314,7 @@ class FireStoreUtils {
     required String userId
   }) async {
     try {
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
         Uri.parse('${Constant.baseUrl}driver-sql/wallet/update'),
         headers: {
           'Content-Type': 'application/json',
@@ -363,7 +363,7 @@ class FireStoreUtils {
     try {
       final userId = await LoginController.getFirebaseId();
       log("updateUser ${userModel.toJson()}");
-      final response = await http.put(
+      final response = await AuthHttpClient().put(
         Uri.parse('${Constant.baseUrl}driver/updateDriverDetails?driverId=$userId'),
         headers: await getHeaders(),
         body: json.encode(userModel.toJson()),
@@ -395,7 +395,7 @@ class FireStoreUtils {
     required bool ready,
   }) async {
     try {
-      final response = await http.put(
+      final response = await AuthHttpClient().put(
         Uri.parse('${Constant.baseUrl}driver/readyToAcceptIsToggle'),
         headers: await getHeaders(),
         body: json.encode({
@@ -531,7 +531,7 @@ class FireStoreUtils {
   // }
   static Future<List<OnBoardingModel>> getOnBoardingList() async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}driver-sql/onboarding'),
         headers: {
           'Content-Type': 'application/json',
@@ -566,7 +566,7 @@ class FireStoreUtils {
         return vendorList;
       }
       final String zoneId = Constant.selectedZone!.id.toString();
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}driver-sql/vendors?zone_id=$zoneId'),
         headers: {
           'Content-Type': 'application/json',
@@ -602,7 +602,7 @@ class FireStoreUtils {
   static Future<bool?> setWalletTransaction(
       WalletTransactionModel walletTransactionModel) async {
     try {
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
          Uri.parse('${Constant.baseUrl}driver/wallet/transaction'),
 
         headers: {
@@ -983,10 +983,11 @@ class FireStoreUtils {
   /// Updates Constant and returns true on success.
   static Future<bool> getForceUpdateConfig() async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}fm/app-settings/getApplicationVersionByAppType?appType=${Constant.userRoleDriver}'),
         headers:  await getHeaders(),
-      ).timeout(const Duration(seconds: 5));
+        timeout: const Duration(seconds: 5),
+      );
       if (response.statusCode != 200) return false;
       final decoded = json.decode(response.body);
       final Map<String, dynamic> data = decoded is Map && decoded['data'] != null
@@ -1111,7 +1112,7 @@ class FireStoreUtils {
       final String driverId = await FireStoreUtils.getCurrentUid();
 
       //3rd screen COD Wallet api
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse(
           '${Constant.baseUrl}driver-sql/wallet/transactions'
               '?page=$page&per_page=$perPage&driver_id=$driverId',
@@ -1444,7 +1445,7 @@ class FireStoreUtils {
   static Future<OrderModel?> getOrderById(String orderId) async {
     OrderModel? orderModel;
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
         headers: {
           'Content-Type': 'application/json',
@@ -1467,7 +1468,7 @@ class FireStoreUtils {
   static Future<DeliveryCharge?> getDeliveryCharge() async {
     DeliveryCharge? deliveryCharge;
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}restaurant/delivery-charge'),
         headers: {
           'Content-Type': 'application/json',
@@ -1500,7 +1501,7 @@ class FireStoreUtils {
       final String country = placeMarks.first.country ?? 'India';
 
       // Make API call
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse('${Constant.baseUrl}driver-sql/tax?country=$country'),
         headers: {
           'Content-Type': 'application/json',
@@ -1557,13 +1558,14 @@ class FireStoreUtils {
       }
       final sanitizedData = _sanitizeForJson(data);
       log("Sending data: ${jsonEncode(sanitizedData)}");
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
         Uri.parse('${Constant.baseUrl}restaurant/orders'),
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode(sanitizedData),
-      ).timeout(const Duration(seconds: 30));
+        timeout: const Duration(seconds: 30),
+      );
       log("Response status: ${response.statusCode}");
       log("Response body: ${response.body}");
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -1598,7 +1600,7 @@ class FireStoreUtils {
       // Try dedicated driver-sql endpoint for status updates first (if it exists)
       // This endpoint should only update status field, not entire order
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}driver-sql/orders/$orderId/status'),
           headers: {
             'Content-Type': 'application/json',
@@ -1625,7 +1627,7 @@ class FireStoreUtils {
       
       // Try PATCH method for partial update
       try {
-        final response = await http.patch(
+        final response = await AuthHttpClient().patch(
           Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
           headers: {
             'Content-Type': 'application/json',
@@ -1653,7 +1655,7 @@ class FireStoreUtils {
       log("⚠️ WARNING: Using POST fallback - backend must support partial updates");
       log("⚠️ If backend does full replace, this will overwrite order data!");
       
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
         Uri.parse('${Constant.baseUrl}restaurant/orders'),
         headers: {
           'Content-Type': 'application/json',
@@ -1815,7 +1817,7 @@ class FireStoreUtils {
   static Future<List<Map<String, dynamic>>> getVendorProducts(String id) async {
     final url = "${Constant.baseUrl}restaurant/vendors/$id";
 
-    final response = await http.get(Uri.parse(url));
+    final response = await AuthHttpClient().get(Uri.parse(url));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -1833,7 +1835,7 @@ class FireStoreUtils {
  static Future<List<Map<String, dynamic>>> getVendorCategories() async {
     final url = "${Constant.baseUrl}restaurant/vendor-categories";
 
-    final response = await http.get(Uri.parse(url));
+    final response = await AuthHttpClient().get(Uri.parse(url));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -1878,7 +1880,7 @@ class FireStoreUtils {
     try {
       String url = '${Constant.baseUrl}firestore/notifications/$type';
         debugPrint("getNotificationContent ${url}");
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse(url),
           headers: {
             'Content-Type': 'application/json',
@@ -1920,7 +1922,7 @@ class FireStoreUtils {
       try {
         String? userId = await LoginController.getFirebaseId();
         // Delete user from database via API
-        final response = await http.delete(
+        final response = await AuthHttpClient().delete(
           Uri.parse('${Constant.baseUrl}driver-sql/users/$userId'),
         );
 
@@ -1944,7 +1946,7 @@ class FireStoreUtils {
 
     static Future<List<DocumentModel>> getDocumentList() async {
       try {
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse('${Constant.baseUrl}documents/driver/list'),
           headers: {
             'Content-Type': 'application/json',
@@ -1976,7 +1978,7 @@ class FireStoreUtils {
       DriverDocumentModel? driverDocumentModel;
       debugPrint("getDocumentOfDriver ${Constant.baseUrl}driver/documents/$userId ");
       try {
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse('${Constant.baseUrl}driver/documents/$userId'),
           headers: {
             'Content-Type': 'application/json',
@@ -2010,7 +2012,7 @@ class FireStoreUtils {
     }
     static Future<InboxModel> addDriverInbox(InboxModel inboxModel) async {
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}chat-driver/inbox'),
           headers: {
             'Content-Type': 'application/json',
@@ -2029,7 +2031,7 @@ class FireStoreUtils {
 
     static Future<ConversationModel> addDriverChat(ConversationModel conversationModel) async {
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}chat-driver/thread'),
           headers: {
             'Content-Type': 'application/json',
@@ -2049,7 +2051,7 @@ class FireStoreUtils {
 
     static Future<ConversationModel> addRestaurantChat(ConversationModel conversationModel) async {
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}chat-restaurant/thread'),
           headers: {
             'Content-Type': 'application/json',
@@ -2155,7 +2157,7 @@ class FireStoreUtils {
 
     static Future<WithdrawMethodModel?> getWithdrawMethod() async {
       try {
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse('${Constant.baseUrl}driver/wallet/withdraw-method?userId=${getCurrentUid()}'),
           headers: {
             'Content-Type': 'application/json',
@@ -2195,7 +2197,7 @@ class FireStoreUtils {
           withdrawMethodModel.userId = userId;
         }
 
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}driver/wallet/withdraw-method'),
           headers: {
             'Content-Type': 'application/json',
@@ -2223,7 +2225,7 @@ class FireStoreUtils {
     }
     static Future<List<WithdrawalModel>?> getWithdrawHistory() async {
       try {
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse('${Constant.baseUrl}driver-sql/wallet/withdraw?driverID=${Constant.userModel!.id.toString()}'),
         );
         if (response.statusCode == 200) {
@@ -2252,7 +2254,7 @@ class FireStoreUtils {
 
     static Future<bool> withdrawWalletAmount(WithdrawalModel userModel) async {
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}driver-sql/wallet/withdraw'),
           headers: {
             'Content-Type': 'application/json',
@@ -2273,7 +2275,7 @@ class FireStoreUtils {
 
     static Future<bool> getFirestOrderOrNOt(OrderModel orderModel) async {
       try {
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse('${Constant.baseUrl}driver-sql/orders/${orderModel.authorID}/is-first'),
           headers: {
             'Content-Type': 'application/json',
@@ -2301,7 +2303,7 @@ class FireStoreUtils {
 
       try {
         // Replace Firebase call with API call
-        final response = await http.get(
+        final response = await AuthHttpClient().get(
           Uri.parse('${Constant.baseUrl}driver-sql/referrals/${orderModel.authorID}'),
         );
 
@@ -2356,7 +2358,7 @@ class FireStoreUtils {
       required UserModel driverModel,
     }) async {
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}driver-sql/orders/assign'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
@@ -2387,7 +2389,7 @@ class FireStoreUtils {
       required String assignedDriverId,
     }) async {
       try {
-        final response = await http.post(
+        final response = await AuthHttpClient().post(
           Uri.parse('${Constant.baseUrl}driver-sql/orders/remove-from-others'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({

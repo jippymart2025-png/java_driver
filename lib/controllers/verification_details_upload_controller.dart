@@ -4,8 +4,7 @@
 // import 'package:aadhar_auth_service/aadhar_auth_service.dart';
 // import 'package:flutter/material.dart';
 // import 'package:get/get.dart';
-// import 'package:http/http.dart' as http;
-// import 'package:image_picker/image_picker.dart';
+// // import 'package:image_picker/image_picker.dart';
 // import 'package:path_provider/path_provider.dart';
 //
 // import 'package:jippydriver_driver/constant/constant.dart';
@@ -424,7 +423,6 @@ import 'dart:io';
 import 'package:aadhar_auth_service/aadhar_auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -435,6 +433,7 @@ import 'package:jippydriver_driver/models/document_model.dart';
 import 'package:jippydriver_driver/models/driver_document_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class DetailsUploadController extends GetxController {
   static const Duration _uploadTimeout = Duration(seconds: 90);
@@ -817,9 +816,10 @@ class DetailsUploadController extends GetxController {
   Future<bool> _uploadDocument(Documents doc) async {
     final uid = await LoginController.getFirebaseId();
     try {
-      final response = await http.post(
+      final response = await AuthHttpClient().post(
         Uri.parse('${Constant.baseUrl}documents/driver/upload'),
         headers: {'Content-Type': 'application/json'},
+        timeout: _uploadTimeout,
         body: jsonEncode({
           'user_id': uid,
           'documentId': doc.documentId ?? '',
@@ -830,7 +830,7 @@ class DetailsUploadController extends GetxController {
           'front_image': doc.frontImage ?? '',
           'back_image': doc.backImage ?? '',
         }),
-      ).timeout(_uploadTimeout);
+      );
 
       debugPrint('Upload [${response.statusCode}]: ${response.body}');
 
@@ -851,9 +851,8 @@ class DetailsUploadController extends GetxController {
       final dir = await getTemporaryDirectory();
       final file = File(
           '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg');
-      final res = await http
-          .get(Uri.parse(path))
-          .timeout(_imageDownloadTimeout);
+      final res = await AuthHttpClient()
+          .get(Uri.parse(path), timeout: _imageDownloadTimeout);
       if (res.statusCode == 200) {
         await file.writeAsBytes(res.bodyBytes);
         return file.path;

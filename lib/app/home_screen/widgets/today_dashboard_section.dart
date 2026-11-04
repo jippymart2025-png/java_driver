@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/app/home_screen/controller/home_controller.dart';
 import 'package:jippydriver_driver/app/home_screen/widgets/dashboard_metric_card.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
@@ -10,6 +9,7 @@ import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Incentive config
@@ -220,7 +220,7 @@ class _IncentiveCardState extends State<_IncentiveCard>
     });
 
     try {
-      final res = await http.post(
+      final res = await AuthHttpClient().post(
         Uri.parse('${Constant.baseUrl}driver-sql/delivery-amount/update'),
         headers: await getHeaders(),
         body: jsonEncode({

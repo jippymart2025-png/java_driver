@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:developer';
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/wallet_transaction_model.dart';
 import 'package:jippydriver_driver/models/driver_incentive_model.dart';
 import 'package:jippydriver_driver/utils/common.dart';
+import 'package:jippydriver_driver/services/auth_http_client.dart';
 
 class ApiService {
 
@@ -15,7 +15,7 @@ class ApiService {
     int perPage = 10,
   }) async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
 
         Uri.parse(
           '${Constant.baseUrl}driver/getDriverWalletTransactions?driverId=$driverId',
@@ -81,7 +81,7 @@ class ApiService {
     int size = 20,
   }) async {
     try {
-      final response = await http.get(
+      final response = await AuthHttpClient().get(
         Uri.parse(
           '${Constant.baseUrl}driver/incentive-settings/history'
               '?driverId=$driverId'
