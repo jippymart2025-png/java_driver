@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/cart_product_model.dart';
 import 'package:jippydriver_driver/models/tax_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
@@ -87,6 +88,263 @@ class OrderModel {
     this.surgeFee,
     //Newly added
   });
+
+  /// Maps the Java backend's `/api/co/customers/getOrderCompleteDetails`
+  /// response (`CoOrderCompleteDetailsResponseDto`) into an [OrderModel].
+  ///
+  /// That endpoint returns its DTO directly (no `{success, data}` envelope) and
+  /// uses a very different shape from the legacy Firestore order documents, so
+  /// it cannot go through [OrderModel.fromJson].
+  factory OrderModel.fromCompleteDetailsJson(Map<String, dynamic> json) {
+    Map<String, dynamic> asMap(dynamic value) {
+      if (value is Map) return Map<String, dynamic>.from(value);
+      if (value is String && value.trim().startsWith('{')) {
+        try {
+          final decoded = jsonDecode(value);
+          if (decoded is Map) return Map<String, dynamic>.from(decoded);
+        } catch (_) {}
+      }
+      return <String, dynamic>{};
+    }
+
+    String? asText(dynamic value) {
+      if (value == null) return null;
+      final text = value.toString().trim();
+      return text.isEmpty || text.toLowerCase() == 'null' ? null : text;
+    }
+
+    num? asNum(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value;
+      return num.tryParse(value.toString().trim());
+    }
+
+    double? asDouble(dynamic value) => asNum(value)?.toDouble();
+
+    Timestamp? asTimestamp(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value;
+      if (value is int) return Timestamp.fromMillisecondsSinceEpoch(value);
+      if (value is String) {
+        final millis = int.tryParse(value);
+        if (millis != null) return Timestamp.fromMillisecondsSinceEpoch(millis);
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) return Timestamp.fromDate(parsed);
+      }
+      return null;
+    }
+
+    String? mapStatus(dynamic value) {
+      final raw = asText(value);
+      if (raw == null) return null;
+      switch (raw.toUpperCase()) {
+        case 'PLACED':
+        case 'ORDER_PLACED':
+          return Constant.orderPlaced;
+        case 'ACCEPTED':
+        case 'ORDER_ACCEPTED':
+        case 'MERCHANT_ACCEPTED':
+          return Constant.orderAccepted;
+        case 'PENDING':
+        case 'DRIVER_PENDING':
+          return Constant.driverPending;
+        case 'DRIVER_ACCEPTED':
+          return Constant.driverAccepted;
+        case 'SHIPPED':
+        case 'ORDER_SHIPPED':
+          return Constant.orderShipped;
+        case 'IN_TRANSIT':
+        case 'OUT_FOR_DELIVERY':
+          return Constant.orderInTransit;
+        case 'COMPLETED':
+        case 'DELIVERED':
+        case 'ORDER_COMPLETED':
+          return Constant.orderCompleted;
+        case 'CANCELLED':
+        case 'CANCELED':
+        case 'ORDER_CANCELLED':
+          return Constant.orderCancelled;
+        case 'ORDER_REJECTED':
+          return Constant.orderRejected;
+        case 'DRIVER_REJECTED':
+          return Constant.driverRejected;
+      }
+      return raw;
+    }
+
+    String? joinParts(Iterable<dynamic> values) {
+      final parts = values
+          .map(asText)
+          .whereType<String>()
+          .where((part) => part.isNotEmpty)
+          .toList();
+      return parts.isEmpty ? null : parts.join(', ');
+    }
+
+    final price = asMap(json['priceBreakup'] ?? json['price_breakup']);
+    final customer = asMap(json['customer']);
+    final outlet = asMap(json['outlet']);
+    final driver = asMap(json['driver']);
+    final rawItems = json['items'];
+
+    final orderId = asText(json['orderId'] ?? json['order_id'] ?? json['id']);
+    final customerId = asText(customer['customerId'] ?? customer['id']);
+    final customerName = asText(
+      customer['customerName'] ?? customer['name'] ?? customer['fullName'],
+    );
+    final customerPhone =
+        asText(customer['phoneNumber'] ?? customer['phone']);
+    final customerEmail = asText(customer['email']);
+    final customerAddress = joinParts([
+      customer['buildingName'],
+      customer['buildingNumber'],
+      customer['address'],
+      customer['landmark'],
+      customer['locality'],
+      customer['area'],
+    ]);
+
+    final outletId = asText(outlet['outletId'] ?? outlet['id']);
+    final outletName = asText(outlet['outletName'] ?? outlet['name']);
+    final outletPhone =
+        asText(outlet['outletPhone'] ?? outlet['phoneNumber']);
+    final outletAddress = joinParts([
+      outlet['buildingNumber'],
+      outlet['buildingName'],
+      outlet['address'],
+      outlet['landmark'],
+      outlet['locality'],
+      outlet['area'],
+    ]);
+
+    final vendor = VendorModel()
+      ..id = outletId
+      ..title = outletName
+      ..location = outletAddress
+      ..phonenumber = outletPhone
+      ..latitude = asDouble(outlet['latitude'] ?? outlet['outletLatitude'])
+      ..longitude = asDouble(outlet['longitude'] ?? outlet['outletLongitude']);
+
+    final address = ShippingAddress(
+      id: customerId,
+      address: customerAddress,
+      addressAs: asText(customer['addressAs'] ?? customer['addressType']),
+      landmark: asText(customer['landmark']),
+      locality: asText(customer['locality']),
+      location: (asDouble(
+                customer['latitude'] ?? customer['customerLatitude'],
+              ) !=
+              null &&
+          asDouble(customer['longitude'] ?? customer['customerLongitude']) !=
+              null)
+          ? UserLocation(
+              latitude: asDouble(
+                customer['latitude'] ?? customer['customerLatitude'],
+              ),
+              longitude: asDouble(
+                customer['longitude'] ?? customer['customerLongitude'],
+              ),
+            )
+          : null,
+    );
+
+    final author = UserModel(
+      id: customerId,
+      firebaseId: customerId,
+      firstName: customerName,
+      email: customerEmail,
+      phoneNumber: customerPhone,
+      buildingNumber: asText(customer['buildingName']),
+      role: Constant.userRoleCustomer,
+    );
+
+    final driverId = asText(driver['driverId'] ?? driver['id']);
+    final driverModel = driverId == null && asText(driver['driverName']) == null
+        ? null
+        : UserModel(
+            id: driverId,
+            firstName: asText(driver['driverName']),
+            phoneNumber: asText(driver['driverMobileNumber']),
+            role: Constant.userRoleDriver,
+          );
+
+    final products = <CartProductModel>[];
+    if (rawItems is List) {
+      for (final rawItem in rawItems) {
+        final item = asMap(rawItem);
+        final unitPrice = asNum(item['onlineUnitPrice'] ?? item['price']);
+        products.add(
+          CartProductModel(
+            id: asText(item['productId'] ?? item['id']),
+            name: asText(item['productName'] ?? item['name']),
+            price: unitPrice?.toString() ?? '0.0',
+            merchantPrice: unitPrice?.toString() ?? '0.0',
+            discountPrice: unitPrice?.toString() ?? '0.0',
+            quantity: asNum(item['quantity'])?.toInt() ?? 1,
+          ),
+        );
+      }
+    }
+
+    final pickupCharges = asNum(price['pickUpCharges'] ?? price['pickupCharge']);
+    final deliveryCharge =
+        asNum(price['driverDeliveryFee'] ?? price['deliveryCharge']);
+    final deliveryTax = asNum(
+      price['customerDeliveryFeeTax'] ?? price['deliveryTax'],
+    );
+    final tip = asNum(price['tip'] ?? price['tipAmount']);
+    final surge = asNum(price['surgeFee']);
+    final orderTotal = asNum(price['orderTotalAmount'] ?? price['orderTotal']);
+    final couponDiscount = asNum(
+      price['couponDiscount'] ?? price['orderAmountDiscounted'],
+    );
+    final initialDriverCharge = (pickupCharges ?? 0) +
+        (deliveryCharge ?? 0) +
+        (deliveryTax ?? 0);
+
+    return OrderModel()
+      ..id = orderId
+      ..status = mapStatus(json['orderStatus'] ?? json['status'])
+      ..createdAt = asTimestamp(json['createdAt'])
+      ..triggerDelivery = Timestamp.now()
+      ..paymentMethod =
+          asText(json['paymentMode'] ?? json['paymentMethod'] ?? json['payment_method'])
+      ..vendorID = outletId
+      ..vendor = vendor
+      ..driverID = driverId
+      ..driver = driverModel
+      ..address = address
+      ..authorID = customerId
+      ..author = author
+      ..products = products
+      ..deliveryCharge = deliveryCharge?.toString() ?? '0.0'
+      ..tipAmount = tip?.toString() ?? '0.0'
+      ..toPay = orderTotal?.toString()
+      ..discount = couponDiscount
+      ..pickUpDistanceInKms = asDouble(
+        price['pickUpDistanceKms'] ?? price['pickupDistanceKm'],
+      )
+      ..deliveryDistanceInKms = asDouble(
+        price['deliveryDistanceKms'] ?? price['deliveryDistanceKm'],
+      )
+      ..pickUpCharges = pickupCharges
+      ..deliverCharges = deliveryCharge
+      ..surgeFee = surge
+      ..rejectedByDrivers = <dynamic>[]
+      ..calculatedCharges = <String, dynamic>{
+        'driverToRestaurantDistance': asDouble(
+          price['pickUpDistanceKms'] ?? price['pickupDistanceKm'],
+        ),
+        'driverToRestaurantCharge': pickupCharges,
+        'restaurantToCustomerDistance': asDouble(
+          price['deliveryDistanceKms'] ?? price['deliveryDistanceKm'],
+        ),
+        'restaurantToCustomerCharge': deliveryCharge,
+        'tipsAmount': tip?.toString(),
+        'surgeAmount': surge?.toString(),
+        'totalCalculatedCharge': initialDriverCharge.toString(),
+      };
+  }
 
     OrderModel.fromJson(Map<String, dynamic> json) {
     try {

@@ -7,12 +7,15 @@ import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/send_notification.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
+import 'package:jippydriver_driver/models/driver_delivery_charge_model.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/today_dashboard_response_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/models/vendor_model.dart';
 import 'package:jippydriver_driver/services/audio_player_service.dart';
 import 'package:jippydriver_driver/services/api_cache_service.dart';
+import 'package:jippydriver_driver/services/driver_delivery_charge_service.dart';
+import 'package:jippydriver_driver/services/order_detail_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
@@ -77,6 +80,27 @@ class HomeController extends GetxController {
   final RxDouble creditedBonus = 0.0.obs;
   final RxDouble toPayAmount                  = 0.0.obs;
   final RxBool isNavigatingToMap              = false.obs;
+
+  // ── Driver delivery charges (Java backend) ────────────────────────────
+  /// Full response of `getDriverDeliveryChargesForOrder` for the order that
+  /// is currently shown in the accept/reject popup. This is the source of
+  /// truth for the popup: outlet/customer details, distances, charges, tips,
+  /// COD availability and order total.
+  final Rxn<DriverDeliveryChargeModel> activeDeliveryCharges =
+      Rxn<DriverDeliveryChargeModel>();
+
+  String?   _deliveryChargesOrderId;
+  DateTime? _deliveryChargesFetchedAt;
+  final Set<String> _deliveryChargesInFlight = <String>{};
+  String?   _deliveryChargesFailureOrderId;
+  DateTime? _deliveryChargesRetryAt;
+  static const Duration _deliveryChargesTtl = Duration(seconds: 30);
+  static const Duration _deliveryChargesFailureTtl = Duration(seconds: 60);
+
+  /// Order id returned by `getActiveOrderByDriverId`. When present it is the
+  /// authoritative order for this driver, even if the local driver profile
+  /// lists are temporarily out of date.
+  String? _serverActiveOrderId;
 
 
   // ── Charge coefficients ───────────────────────────────────────────────
@@ -722,9 +746,170 @@ class HomeController extends GetxController {
   //  Charge calculations
   // ══════════════════════════════════════════════════════════════════════
 
+  /// Loads the authoritative driver delivery charges from the Java backend.
+  ///
+  /// The call needs the driver's current GPS coordinates, so it is executed
+  /// lazily (after the order popup is already visible) and cached per order.
+  Future<void> _loadDriverDeliveryCharges(
+    String orderId, {
+    bool forceRefresh = false,
+  }) async {
+    final id = orderId.trim();
+    if (id.isEmpty) return;
+
+    if (!forceRefresh &&
+        _deliveryChargesOrderId == id &&
+        activeDeliveryCharges.value != null) {
+      final fetchedAt = _deliveryChargesFetchedAt;
+      if (fetchedAt != null &&
+          DateTime.now().difference(fetchedAt) < _deliveryChargesTtl) {
+        return;
+      }
+    }
+
+    final retryAt = _deliveryChargesRetryAt;
+    if (!forceRefresh &&
+        _deliveryChargesFailureOrderId == id &&
+        retryAt != null &&
+        DateTime.now().isBefore(retryAt)) {
+      return;
+    }
+
+    if (_deliveryChargesInFlight.contains(id)) return;
+    _deliveryChargesInFlight.add(id);
+    try {
+      final coords = await _resolveDriverLatLngForCharges();
+      if (coords == null) {
+        AppLogger.log(
+          'Delivery charges skipped for $id: driver location unavailable',
+          tag: 'API',
+        );
+        return;
+      }
+
+      final details = await DriverDeliveryChargeService.fetchForOrder(
+        orderId: id,
+        driverLatitude: coords.lat,
+        driverLongitude: coords.lng,
+      );
+
+      if (details == null) {
+        _deliveryChargesFailureOrderId = id;
+        _deliveryChargesRetryAt =
+            DateTime.now().add(_deliveryChargesFailureTtl);
+        return;
+      }
+
+      // The driver may have moved on to another order while the request was
+      // in flight; never attach stale details to the new order.
+      if (currentOrder.value.id != id) return;
+
+      _deliveryChargesOrderId = id;
+      _deliveryChargesFetchedAt = DateTime.now();
+      _deliveryChargesFailureOrderId = null;
+      _deliveryChargesRetryAt = null;
+      activeDeliveryCharges.value = details;
+      _applyDriverDeliveryCharges(details);
+      currentOrder.refresh();
+    } catch (e) {
+      AppLogger.log('Delivery charges apply error for $id: $e', tag: 'API');
+    } finally {
+      _deliveryChargesInFlight.remove(id);
+    }
+  }
+
+  /// Merges the backend response into the currently displayed order and the
+  /// reactive charge values used by the popup.
+  void _applyDriverDeliveryCharges(DriverDeliveryChargeModel details) {
+    final order = currentOrder.value;
+    if (order.id == null || order.id!.isEmpty) return;
+
+    // Distances / charges shown in the popup.
+    driverToRestaurantDistance.value = details.pickupDistanceKm;
+    restaurantToCustomerDistance.value = details.deliveryDistanceKm;
+    driverToRestaurantCharge.value = details.pickupCharge;
+    restaurantToCustomerCharge.value = details.deliveryCharge;
+    _restaurantToCustomerBillableKm = details.deliveryDistanceKm;
+    totalCalculatedCharge.value = details.effectiveDriverCharge;
+
+    order.pickUpDistanceInKms = details.pickupDistanceKm;
+    order.deliveryDistanceInKms = details.deliveryDistanceKm;
+    order.pickUpCharges = details.pickupCharge;
+    order.deliverCharges = details.deliveryCharge;
+
+    // Mark the local charge calculator as done for this order so
+    // `_syncVendorAndChargesForCurrentOrder` keeps the backend values instead
+    // of replacing them with locally estimated ones.
+    _chargesComputedForOrderId = order.id!.toString();
+
+    if (details.tipAmount > 0) {
+      order.tipAmount = details.tipAmount.toString();
+    }
+    if (details.deliveryCharge > 0) {
+      order.deliveryCharge = details.deliveryCharge.toString();
+    }
+
+    // Prefer the outlet details supplied by the charges API.
+    if (details.hasOutletData || details.hasOutletCoordinates) {
+      final vendor = order.vendor ?? VendorModel();
+      if (details.outletName.trim().isNotEmpty) {
+        vendor.title = details.outletName.trim();
+      }
+      if (details.outletAddress.trim().isNotEmpty) {
+        vendor.location = details.outletAddress.trim();
+      }
+      if (details.outletPhoneNumber.trim().isNotEmpty) {
+        vendor.phonenumber = details.outletPhoneNumber.trim();
+      }
+      if (details.hasOutletCoordinates) {
+        vendor.latitude = details.outletLatitude;
+        vendor.longitude = details.outletLongitude;
+      }
+      order.vendor = vendor;
+      order.vendorID ??= vendor.id;
+    }
+
+    // Prefer the customer address supplied by the charges API.
+    if (details.hasCustomerData || details.hasCustomerCoordinates) {
+      final address = order.address ?? ShippingAddress();
+      if (details.customerAddress.trim().isNotEmpty) {
+        address.address = details.customerAddress.trim();
+      }
+      if (details.hasCustomerCoordinates) {
+        address.location = UserLocation(
+          latitude: details.customerLatitude,
+          longitude: details.customerLongitude,
+        );
+      }
+      order.address = address;
+    }
+
+    // Persist the backend charge values in the same shape the rest of the app
+    // reads from `OrderModel.calculatedCharges`.
+    _updateOrderWithCharges();
+  }
+
+  void _clearDriverDeliveryCharges() {
+    activeDeliveryCharges.value = null;
+    _deliveryChargesOrderId = null;
+    _deliveryChargesFetchedAt = null;
+    _deliveryChargesFailureOrderId = null;
+    _deliveryChargesRetryAt = null;
+  }
+
   Future<void> calculateOrderChargesInitial(
       {bool fetchSurgeAndToPay = true}) async {
     if (currentOrder.value.id == null || _isCalculatingCharges) return;
+
+    // Backend charges are authoritative. Never replace them with a locally
+    // estimated route calculation.
+    final backendDetails = activeDeliveryCharges.value;
+    if (backendDetails != null &&
+        _deliveryChargesOrderId == currentOrder.value.id?.toString()) {
+      _applyDriverDeliveryCharges(backendDetails);
+      return;
+    }
+
     _isCalculatingCharges = true;
     var completedOk  = false;
     var hadR2cInputs = false;
@@ -793,6 +978,14 @@ class HomeController extends GetxController {
         }());
       }
     }
+
+    // A backend response may have arrived while the local estimate was
+    // running. Backend values always win, so restore them one final time.
+    final latestBackend = activeDeliveryCharges.value;
+    if (latestBackend != null &&
+        _deliveryChargesOrderId == currentOrder.value.id?.toString()) {
+      _applyDriverDeliveryCharges(latestBackend);
+    }
   }
 
   Future<void> calculateOrderCharges() async {
@@ -853,6 +1046,23 @@ class HomeController extends GetxController {
   Future<void> _syncVendorAndChargesForCurrentOrder() async {
     final oid = currentOrder.value.id?.toString();
     if (oid == null || oid.isEmpty) return;
+
+    // If the backend returned charges for this order, keep them. Refresh in
+    // the background when the cached copy is older than the TTL.
+    final backendDetails = activeDeliveryCharges.value;
+    if (backendDetails != null && _deliveryChargesOrderId == oid) {
+      _applyDriverDeliveryCharges(backendDetails);
+      final fetchedAt = _deliveryChargesFetchedAt;
+      if (fetchedAt == null ||
+          DateTime.now().difference(fetchedAt) >= _deliveryChargesTtl) {
+        unawaited(_loadDriverDeliveryCharges(oid));
+      }
+      return;
+    }
+
+    // No backend copy yet — start loading it in the background. The local
+    // calculation below remains a temporary fallback for the popup.
+    unawaited(_loadDriverDeliveryCharges(oid));
 
     if (currentOrder.value.vendor == null &&
         (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
@@ -1400,6 +1610,12 @@ class HomeController extends GetxController {
     final tip   =
         double.tryParse(currentOrder.value.tipAmount?.toString() ?? '0') ??
             0.0;
+    final backendDetails = activeDeliveryCharges.value;
+    final useBackendTotal = backendDetails != null &&
+        _deliveryChargesOrderId == currentOrder.value.id?.toString();
+    final total = useBackendTotal
+        ? backendDetails.effectiveDriverCharge
+        : totalCalculatedCharge.value + surge + tip;
     currentOrder.value.calculatedCharges = {
       'driverToRestaurantDistance'     : driverToRestaurantDistance.value,
       'driverToRestaurantDuration'     : driverToRestaurantDuration.value,
@@ -1410,8 +1626,7 @@ class HomeController extends GetxController {
       'restaurantToCustomerCharge'     : restaurantToCustomerCharge.value,
       'tipsAmount'                     : currentOrder.value.tipAmount,
       'surgeAmount'                    : surge.toString(),
-      'totalCalculatedCharge'          :
-      '${totalCalculatedCharge.value + surge + tip}',
+      'totalCalculatedCharge'          : '$total',
       'calculatedAt'                   : FieldValue.serverTimestamp(),
     };
   }
@@ -1745,6 +1960,7 @@ class HomeController extends GetxController {
         _notifiedOrderIds.remove(currentOrder.value.id);
         currentOrder.value = OrderModel();
         _chargesComputedForOrderId = null;
+        _clearDriverDeliveryCharges();
         _clearLegCaches();
         await clearMap();
         update();
@@ -1776,6 +1992,7 @@ class HomeController extends GetxController {
 
       currentOrder.value = OrderModel();
       _chargesComputedForOrderId = null;
+      _clearDriverDeliveryCharges();
       _clearLegCaches();
       await clearMap();
       _notifyOrderUiChanged(refreshOrder: false);
@@ -1899,6 +2116,11 @@ class HomeController extends GetxController {
         isLoading.value = false;
       }
     }
+
+    // Resolve the authoritative active order immediately instead of waiting
+    // for the first polling tick. This is what feeds the order id into
+    // `getDriverDeliveryChargesForOrder`.
+    unawaited(refreshHomeScreen());
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -1914,8 +2136,13 @@ class HomeController extends GetxController {
 
     final inProgress = driverModel.value.inProgressOrderID ?? [];
     final requests   = driverModel.value.orderRequestData  ?? [];
+    final serverActiveOrderId = _serverActiveOrderId;
+
+    final currentIsServerActive = serverActiveOrderId != null &&
+        currentOrder.value.id == serverActiveOrderId;
 
     if (currentOrder.value.id != null &&
+        !currentIsServerActive &&
         !inProgress.contains(currentOrder.value.id) &&
         !requests.contains(currentOrder.value.id)) {
       if (_isAcceptingOrder) return;
@@ -1925,6 +2152,7 @@ class HomeController extends GetxController {
       if (!isPendingNoDriver) {
         currentOrder.value = OrderModel();
         _chargesComputedForOrderId = null;
+        _clearDriverDeliveryCharges();
         _clearLegCaches();
         await clearMap();
         await AudioPlayerService.playSound(false);
@@ -1933,16 +2161,23 @@ class HomeController extends GetxController {
     }
 
     String? firstId;
-    final validProgress =
-    inProgress.where((id) => id?.isNotEmpty ?? false).toList();
-    if (validProgress.isNotEmpty) {
-      firstId = validProgress.first;
+
+    // `getActiveOrderByDriverId` is authoritative. If it returned an order,
+    // show that order even when the local driver profile lists are stale.
+    if (serverActiveOrderId != null && serverActiveOrderId.isNotEmpty) {
+      firstId = serverActiveOrderId;
     } else {
-      final validReqs = requests
-          .where((id) =>
-      (id?.isNotEmpty ?? false) && id != currentOrder.value.id)
-          .toList();
-      if (validReqs.isNotEmpty) firstId = validReqs.first;
+      final validProgress =
+      inProgress.where((id) => id?.isNotEmpty ?? false).toList();
+      if (validProgress.isNotEmpty) {
+        firstId = validProgress.first;
+      } else {
+        final validReqs = requests
+            .where((id) =>
+        (id?.isNotEmpty ?? false) && id != currentOrder.value.id)
+            .toList();
+        if (validReqs.isNotEmpty) firstId = validReqs.first;
+      }
     }
 
     if (firstId == null) return;
@@ -1962,31 +2197,35 @@ class HomeController extends GetxController {
         required List inProgress,
         required List requests,
       }) async {
-    OrderModel? fetched;
+    // Primary endpoint: the CO service's complete order details. Returns the
+    // DTO directly and includes customer, outlet, items and price breakup.
+    OrderModel? fetched = await OrderDetailService.fetchOrder(orderId);
 
-    // Primary endpoint
-    try {
-      final h   = HttpClientService();
-      final res = await h.get(
-        Uri.parse(
-            '${Constant.baseUrl}driver/get-current-reject-accept'
-                '?order_id=$orderId'
-                '&exclude_statuses='
-                'Order+Cancelled,Driver+Rejected,Order+Completed'),
-        headers: {'Accept': 'application/json'},
-        cacheStrategy: CacheStrategy.order,
-        useCache: true,
-        timeout: const Duration(seconds: 10),
-      );
-      if (res.statusCode == 200 && !res.body.startsWith('<')) {
-        final d = jsonDecode(res.body);
-        if (d['success'] == true && d['order'] != null) {
-          fetched = OrderModel.fromJson(d['order']);
+    // Legacy driver endpoint (kept only as a fallback for older backends).
+    if (fetched == null) {
+      try {
+        final h   = HttpClientService();
+        final res = await h.get(
+          Uri.parse(
+              '${Constant.baseUrl}driver/get-current-reject-accept'
+                  '?order_id=$orderId'
+                  '&exclude_statuses='
+                  'Order+Cancelled,Driver+Rejected,Order+Completed'),
+          headers: {'Accept': 'application/json'},
+          cacheStrategy: CacheStrategy.order,
+          useCache: true,
+          timeout: const Duration(seconds: 10),
+        );
+        if (res.statusCode == 200 && !res.body.startsWith('<')) {
+          final d = jsonDecode(res.body);
+          if (d['success'] == true && d['order'] != null) {
+            fetched = OrderModel.fromJson(d['order']);
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
-    // Fallback endpoint
+    // Legacy restaurant endpoint (kept only as a fallback for older backends).
     if (fetched == null) {
       try {
         final h   = HttpClientService();
@@ -2013,6 +2252,7 @@ class HomeController extends GetxController {
       if (currentOrder.value.id == orderId) {
         currentOrder.value = OrderModel();
         _chargesComputedForOrderId = null;
+        _clearDriverDeliveryCharges();
         _clearLegCaches();
         await clearMap();
         await AudioPlayerService.playSound(false);
@@ -2026,6 +2266,13 @@ class HomeController extends GetxController {
       driverModel.value.inProgressOrderID?.remove(fetched.id);
       driverModel.value.orderRequestData?.remove(fetched.id);
       await FireStoreUtils.updateUser(driverModel.value);
+      if (currentOrder.value.id == fetched.id) {
+        currentOrder.value = OrderModel();
+        _chargesComputedForOrderId = null;
+        _clearDriverDeliveryCharges();
+        _clearLegCaches();
+        await clearMap();
+      }
       resetStatusTracking();
       _notifyOrderUiChanged(refreshOrder: false);
       return;
@@ -2033,6 +2280,9 @@ class HomeController extends GetxController {
 
     currentOrder.value = fetched;
     _chargesComputedForOrderId = null;
+    if (_deliveryChargesOrderId != fetched.id) {
+      _clearDriverDeliveryCharges();
+    }
     _clearLegCaches(); // fresh order → clear any leftover cached distances
     _lastFetchedOrderId   = fetched.id;
     _lastKnownStatus      = fetched.status;
@@ -2048,6 +2298,10 @@ class HomeController extends GetxController {
 
     changeData();
     _notifyOrderUiChanged();
+
+    // Popup is already visible — enrich it with the backend's outlet,
+    // customer, distance and charge details without blocking the UI.
+    unawaited(_loadDriverDeliveryCharges(fetched.id!, forceRefresh: true));
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -2057,24 +2311,33 @@ class HomeController extends GetxController {
   Future<void> refreshCurrentOrder({bool forceRefresh = false}) async {
     if (currentOrder.value.id == null) return;
     try {
-      final h = HttpClientService();
-      if (forceRefresh) {
-        await h.invalidateCache('orders/${currentOrder.value.id}');
+      final orderId = currentOrder.value.id!;
+
+      // Primary endpoint: CO complete order details.
+      OrderModel? refreshed = await OrderDetailService.fetchOrder(orderId);
+
+      // Legacy endpoint (kept only as a fallback for older backends).
+      if (refreshed == null) {
+        final h = HttpClientService();
+        if (forceRefresh) {
+          await h.invalidateCache('orders/$orderId');
+        }
+
+        final res = await h.get(
+          Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
+          cacheStrategy: CacheStrategy.order,
+          useCache: !forceRefresh,
+          forceRefresh: forceRefresh,
+        );
+        if (res.statusCode == 200 && !res.body.startsWith('<')) {
+          final body = jsonDecode(res.body);
+          if (body['success'] == true && body['data'] != null) {
+            refreshed = OrderModel.fromJson(body['data']);
+          }
+        }
       }
 
-      final res = await h.get(
-        Uri.parse(
-            '${Constant.baseUrl}restaurant/orders/${currentOrder.value.id}'),
-        cacheStrategy: CacheStrategy.order,
-        useCache: !forceRefresh,
-        forceRefresh: forceRefresh,
-      );
-      if (res.statusCode != 200) return;
-
-      final body = jsonDecode(res.body);
-      if (body['success'] != true || body['data'] == null) return;
-
-      final refreshed = OrderModel.fromJson(body['data']);
+      if (refreshed == null) return;
       final priority  = {
         Constant.driverPending: 1,
         Constant.driverAccepted: 2,
@@ -2092,6 +2355,7 @@ class HomeController extends GetxController {
         await FireStoreUtils.updateUser(driverModel.value);
         currentOrder.value = OrderModel();
         _chargesComputedForOrderId = null;
+        _clearDriverDeliveryCharges();
         _clearLegCaches();
         await clearMap();
         resetStatusTracking();
@@ -2133,6 +2397,40 @@ class HomeController extends GetxController {
   //  refreshHomeScreen
   // ══════════════════════════════════════════════════════════════════════
 
+  String? _extractActiveOrderId(Map<String, dynamic> map) {
+    final raw = map['orderId'] ??
+        map['order_id'] ??
+        map['activeOrderId'] ??
+        map['active_order_id'];
+    if (raw == null) return null;
+    final id = raw.toString().trim();
+    if (id.isEmpty || id.toLowerCase() == 'null') return null;
+    return id;
+  }
+
+  bool _looksLikeDriverPayload(Map<String, dynamic> map) {
+    const driverKeys = {
+      'id',
+      'driverId',
+      'firebaseId',
+      'firebase_id',
+      'firstName',
+      'lastName',
+      'fullName',
+      'phoneNumber',
+      'email',
+      'role',
+      'walletAmount',
+      'wallet_amount',
+      'isActive',
+      'readyToAcceptOrders',
+      'isApproved',
+      'orderRequestData',
+      'inProgressOrderID',
+    };
+    return driverKeys.any(map.containsKey);
+  }
+
   Future<bool> refreshHomeScreen() async {
     if (_isRefreshing) return false;
     _isRefreshing = true;
@@ -2162,33 +2460,40 @@ class HomeController extends GetxController {
       if (lm   != null) _lastModified = lm;
 
       final j = jsonDecode(res.body);
+      if (j is! Map) return false;
 
-      Map<String, dynamic> userDetails;
-      if (j is Map<String, dynamic>) {
-        if (j.containsKey('data') && j['data'] is Map) {
-          userDetails = j['data'] as Map<String, dynamic>;
-        } else {
-          userDetails = j;
-        }
-      } else {
+      final root = Map<String, dynamic>.from(j);
+      final userDetails = root['data'] is Map
+          ? Map<String, dynamic>.from(root['data'] as Map)
+          : root;
+      final activeOrderId = _extractActiveOrderId(root) ??
+          _extractActiveOrderId(userDetails);
+
+      // `getActiveOrderByDriverId` may answer with only a status + order id
+      // (the driver profile has its own `getDriverDetails` endpoint). Never
+      // overwrite the loaded driver with that sparse payload.
+      _serverActiveOrderId = activeOrderId;
+
+      final looksLikeDriver = _looksLikeDriverPayload(userDetails);
+      if (!looksLikeDriver && activeOrderId == null && userDetails.isEmpty) {
         return false;
       }
 
-      if (userDetails.isEmpty) return false;
+      if (looksLikeDriver) {
+        if (!userDetails.containsKey('role')) {
+          userDetails['role'] = Constant.userRoleDriver;
+        }
+        if (!userDetails.containsKey('active')) {
+          userDetails['active'] = true;
+        }
+        if (!userDetails.containsKey('isActive')) {
+          userDetails['isActive'] = true;
+        }
 
-      if (!userDetails.containsKey('role')) {
-        userDetails['role'] = Constant.userRoleDriver;
+        final parsed = UserModel.fromJson(userDetails);
+        _filterCompletedFromUser(parsed);
+        driverModel.value = parsed;
       }
-      if (!userDetails.containsKey('active')) {
-        userDetails['active'] = true;
-      }
-      if (!userDetails.containsKey('isActive')) {
-        userDetails['isActive'] = true;
-      }
-
-      final parsed = UserModel.fromJson(userDetails);
-      _filterCompletedFromUser(parsed);
-      driverModel.value = parsed;
 
       final curr   = driverModel.value.orderRequestData?.toList();
       final hasNew = (curr?.isNotEmpty ?? false) &&
@@ -2205,6 +2510,14 @@ class HomeController extends GetxController {
           }
         }
         await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      if (activeOrderId != null && currentOrder.value.id != activeOrderId) {
+        // A new active order is reported by the backend — load it and pass its
+        // id to `getDriverDeliveryChargesForOrder` from there. Bypass the
+        // short getCurrentOrder throttle: this id just arrived from the server
+        // and must not be skipped because of an earlier poll/startup call.
+        _lastGetOrderTime = null;
         await getCurrentOrder();
       } else if (currentOrder.value.id != null) {
         final shouldRefresh = _lastStatusChangeTime == null ||
@@ -2232,43 +2545,53 @@ class HomeController extends GetxController {
 
   Future<void> _forceRefreshOrder(String orderId) async {
     try {
-      final h = HttpClientService();
-      await h.invalidateCache('orders/$orderId');
-      final res = await h.get(
-        Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
-        headers: {'Accept': 'application/json'},
-        cacheStrategy: CacheStrategy.order,
-        useCache: false,
-        forceRefresh: true,
-        timeout: const Duration(seconds: 10),
-      );
-      if (res.statusCode == 200 && !res.body.startsWith('<')) {
-        final d = jsonDecode(res.body);
-        if (d['success'] == true && d['data'] != null) {
-          final refreshed = OrderModel.fromJson(d['data']);
-          final priority  = {
-            Constant.driverPending: 1,
-            Constant.driverAccepted: 2,
-            Constant.orderShipped: 2,
-            Constant.orderInTransit: 3,
-            Constant.orderCompleted: 4,
-          };
-          final cur = priority[currentOrder.value.status] ?? 0;
-          final nw  = priority[refreshed.status] ?? 0;
-          if (nw >= cur) {
-            refreshed.driverID = driverModel.value.id;
-            refreshed.driver   = driverModel.value;
-            currentOrder.value = refreshed;
+      // Primary endpoint: CO complete order details.
+      OrderModel? refreshed = await OrderDetailService.fetchOrder(orderId);
+
+      // Legacy endpoint (kept only as a fallback for older backends).
+      if (refreshed == null) {
+        final h = HttpClientService();
+        await h.invalidateCache('orders/$orderId');
+        final res = await h.get(
+          Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
+          headers: {'Accept': 'application/json'},
+          cacheStrategy: CacheStrategy.order,
+          useCache: false,
+          forceRefresh: true,
+          timeout: const Duration(seconds: 10),
+        );
+        if (res.statusCode == 200 && !res.body.startsWith('<')) {
+          final d = jsonDecode(res.body);
+          if (d['success'] == true && d['data'] != null) {
+            refreshed = OrderModel.fromJson(d['data']);
           }
-          if (currentOrder.value.vendor == null &&
-              (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
-            await _fetchVendorData(currentOrder.value.vendorID!);
-          }
-          await calculateOrderChargesInitial();
-          changeData();
-          _notifyOrderUiChanged();
         }
       }
+
+      if (refreshed == null) return;
+
+      final priority  = {
+        Constant.driverPending: 1,
+        Constant.driverAccepted: 2,
+        Constant.orderShipped: 2,
+        Constant.orderInTransit: 3,
+        Constant.orderCompleted: 4,
+      };
+      final cur = priority[currentOrder.value.status] ?? 0;
+      final nw  = priority[refreshed.status] ?? 0;
+      if (nw >= cur) {
+        refreshed.driverID = driverModel.value.id;
+        refreshed.driver   = driverModel.value;
+        currentOrder.value = refreshed;
+      }
+      if (currentOrder.value.vendor == null &&
+          (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
+        await _fetchVendorData(currentOrder.value.vendorID!);
+      }
+      await calculateOrderChargesInitial();
+      changeData();
+      _notifyOrderUiChanged();
+      unawaited(_loadDriverDeliveryCharges(orderId, forceRefresh: true));
     } catch (e) {
       AppLogger.log('_forceRefreshOrder error: $e', tag: 'API');
     }

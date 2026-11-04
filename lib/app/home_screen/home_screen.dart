@@ -16,6 +16,7 @@ import 'package:jippydriver_driver/app/home_screen/controller/home_controller.da
 import 'package:jippydriver_driver/app/home_screen/widgets/order_bottom_drawer.dart';
 import 'package:jippydriver_driver/app/home_screen/widgets/today_dashboard_section.dart';
 import 'package:jippydriver_driver/main.dart';
+import 'package:jippydriver_driver/models/driver_delivery_charge_model.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
@@ -398,20 +399,30 @@ class _AcceptRejectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final details = ctrl.activeDeliveryCharges.value;
     final vendor  = ctrl.currentOrder.value.vendor;
     final address = ctrl.currentOrder.value.address;
-    final vLat    = vendor?.latitudeValue;
-    final vLng    = vendor?.longitudeValue;
-    final cLat    = address?.location?.latitude;
-    final cLng    = address?.location?.longitude;
+    final vLat    = details?.hasOutletCoordinates == true
+        ? details!.outletLatitude
+        : vendor?.latitudeValue;
+    final vLng    = details?.hasOutletCoordinates == true
+        ? details!.outletLongitude
+        : vendor?.longitudeValue;
+    final cLat    = details?.hasCustomerCoordinates == true
+        ? details!.customerLatitude
+        : address?.location?.latitude;
+    final cLng    = details?.hasCustomerCoordinates == true
+        ? details!.customerLongitude
+        : address?.location?.longitude;
     double km     = 0.0;
-    if (vendor != null &&
-        address != null &&
-        vLat != null &&
+    if (vLat != null &&
         vLng != null &&
         cLat != null &&
         cLng != null) {
       km = Geolocator.distanceBetween(vLat, vLng, cLat, cLng) / 1000;
+    }
+    if (details != null && details.deliveryDistanceKm > 0) {
+      km = details.deliveryDistanceKm;
     }
 
     return Padding(
@@ -428,7 +439,7 @@ class _AcceptRejectCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTimeline(vendor, address),
+              _buildTimeline(details, vendor, address),
               const SizedBox(height: 8),
               MySeparator(
                 color: theme.getThem()
@@ -473,7 +484,30 @@ class _AcceptRejectCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTimeline(vendor, address) {
+  Widget _buildTimeline(
+    DriverDeliveryChargeModel? details,
+    vendor,
+    address,
+  ) {
+    final outletTitle = details?.outletName.trim().isNotEmpty == true
+        ? details!.outletName.trim()
+        : '${vendor?.title ?? 'N/A'}';
+    final outletAddress = details?.outletAddress.trim().isNotEmpty == true
+        ? details!.outletAddress.trim()
+        : '${vendor?.location ?? 'N/A'}';
+    final outletPhone = details?.outletPhoneNumber.trim().isNotEmpty == true
+        ? details!.outletPhoneNumber.trim()
+        : (vendor?.phonenumber?.toString() ?? '');
+
+    final customerName = details?.customerName.trim() ?? '';
+    final customerTitle = customerName.isNotEmpty
+        ? customerName
+        : 'Deliver to the'.tr;
+    final customerAddress = details?.customerAddress.trim().isNotEmpty == true
+        ? details!.customerAddress.trim()
+        : (address?.getFullAddress() ?? 'N/A');
+    final customerPhone = details?.customerPhoneNumber.trim() ?? '';
+
     return Timeline.tileBuilder(
       shrinkWrap: true,
       padding: EdgeInsets.zero,
@@ -488,29 +522,64 @@ class _AcceptRejectCard extends StatelessWidget {
             AppThemeData.driverApp50, AppThemeData.driverApp300),
         connectorBuilder: (_, __, ___) =>
         const DashedLineConnector(color: AppThemeData.grey300, gap: 3),
-        contentsBuilder: (ctx, index) => Padding(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: index == 0
-                ? [
-              Text('${vendor?.title ?? 'N/A'}',
-                  style: _titleStyle()),
-              Text('${vendor?.location ?? 'N/A'}',
-                  style: _subtitleStyle()),
-            ]
-                : [
-              Text('Deliver to the'.tr, style: _titleStyle()),
-              Text(address?.getFullAddress() ?? 'N/A',
-                  style: _subtitleStyle()),
-            ],
-          ),
-        ),
+        contentsBuilder: (ctx, index) {
+          final phone = index == 0 ? outletPhone : customerPhone;
+          return Padding(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: index == 0
+                        ? [
+                      Text(outletTitle, style: _titleStyle()),
+                      Text(outletAddress, style: _subtitleStyle()),
+                    ]
+                        : [
+                      Text(customerTitle, style: _titleStyle()),
+                      Text(customerAddress, style: _subtitleStyle()),
+                    ],
+                  ),
+                ),
+                if (phone.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  _phoneButton(phone),
+                ],
+              ],
+            ),
+          );
+        },
         itemCount: 2,
       ),
     );
   }
+
+  Widget _phoneButton(String phone) => InkWell(
+    onTap: () => Constant.makePhoneCall(phone),
+    child: Container(
+      width: 38,
+      height: 38,
+      decoration: ShapeDecoration(
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            width: 1,
+            color: theme.getThem()
+                ? AppThemeData.grey700
+                : AppThemeData.grey200,
+          ),
+          borderRadius: BorderRadius.circular(120),
+        ),
+      ),
+      child: const Icon(
+        Icons.phone_outlined,
+        size: 19,
+        color: AppThemeData.primary300,
+      ),
+    ),
+  );
 
   Widget _circleIcon(String asset, Color bg, Color ic) => Container(
     decoration: ShapeDecoration(
@@ -554,6 +623,11 @@ class _ChargeBreakdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      final details = ctrl.activeDeliveryCharges.value;
+      if (details != null && details.hasChargeData) {
+        return _apiBreakdown(details);
+      }
+
       final tip      = double.tryParse(
           ctrl.currentOrder.value.tipAmount?.toString() ?? '0') ??
           0.0;
@@ -594,6 +668,79 @@ class _ChargeBreakdown extends StatelessWidget {
       ]);
     });
   }
+
+  Widget _apiBreakdown(DriverDeliveryChargeModel d) {
+    return Column(children: [
+      _row(
+        'Pickup Distance'.tr,
+        '${d.pickupDistanceKm.toStringAsFixed(2)} ${Constant.distanceType}',
+      ),
+      _row(
+        'Delivery Distance'.tr,
+        '${d.deliveryDistanceKm.toStringAsFixed(2)} ${Constant.distanceType}',
+      ),
+      const SizedBox(height: 4),
+      _row(
+        'Pickup Charge'.tr,
+        Constant.amountShow(amount: d.pickupCharge.toString()),
+      ),
+      const SizedBox(height: 4),
+      _row(
+        'Delivery Charge'.tr,
+        Constant.amountShow(amount: d.deliveryCharge.toString()),
+      ),
+      const SizedBox(height: 4),
+      _row('Tax'.tr, Constant.amountShow(amount: d.taxAmount.toString())),
+      const SizedBox(height: 4),
+      _row('Tips'.tr, Constant.amountShow(amount: d.tipAmount.toString())),
+      const SizedBox(height: 4),
+      _row(
+        'Order Total'.tr,
+        Constant.amountShow(amount: d.orderTotalAmount.toString()),
+      ),
+      const SizedBox(height: 6),
+      _codRow(d.codAvailable),
+      const SizedBox(height: 8),
+      _totalEarningsBox(
+        d.effectiveDriverCharge,
+        apiTotal: true,
+        label: 'Total Driver Charge'.tr,
+      ),
+    ]);
+  }
+
+  Widget _codRow(bool available) => Row(children: [
+    Icon(
+      available ? Icons.payments_outlined : Icons.payment_outlined,
+      color: available ? AppThemeData.success500 : AppThemeData.grey400,
+      size: 16,
+    ),
+    const SizedBox(width: 6),
+    Expanded(
+      child: Text(
+        'COD Available'.tr,
+        style: TextStyle(
+          fontFamily: AppThemeData.medium,
+          color: theme.getThem()
+              ? AppThemeData.grey300
+              : AppThemeData.grey600,
+          fontSize: 14,
+        ),
+      ),
+    ),
+    Text(
+      available ? 'Yes'.tr : 'No'.tr,
+      style: TextStyle(
+        fontFamily: AppThemeData.semiBold,
+        color: available
+            ? AppThemeData.success500
+            : (theme.getThem()
+                ? AppThemeData.grey400
+                : AppThemeData.grey500),
+        fontSize: 14,
+      ),
+    ),
+  ]);
 
   Widget _row(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
@@ -652,7 +799,12 @@ class _ChargeBreakdown extends StatelessWidget {
     ]),
   );
 
-  Widget _totalEarningsBox(double total) => Container(
+  Widget _totalEarningsBox(
+    double total, {
+    bool apiTotal = false,
+    String? label,
+  }) =>
+      Container(
     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
     decoration: BoxDecoration(
       color: AppThemeData.primary50.withOpacity(0.2),
@@ -661,7 +813,7 @@ class _ChargeBreakdown extends StatelessWidget {
     ),
     child: Row(children: [
       Expanded(
-        child: Text('Total Earnings'.tr,
+        child: Text(label ?? 'Total Earnings'.tr,
             style: TextStyle(
               fontFamily: AppThemeData.semiBold,
               color: theme.getThem()
@@ -671,7 +823,9 @@ class _ChargeBreakdown extends StatelessWidget {
             )),
       ),
       Text(
-        total.toStringAsFixed(2),
+        apiTotal
+            ? Constant.amountShow(amount: total.toString())
+            : total.toStringAsFixed(2),
         style: const TextStyle(
           fontFamily: AppThemeData.bold,
           color: AppThemeData.primary500,
@@ -767,20 +921,33 @@ class _OrderCardContent extends StatelessWidget {
     ]);
   }
 
-  Widget _buildPickupRow() => Row(children: [
-    _circleIcon('assets/icons/ic_building.svg', AppThemeData.primary50,
-        AppThemeData.primary300),
-    const SizedBox(width: 10),
-    Expanded(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${order.vendor?.title}', style: _titleStyle()),
-        Text('${order.vendor?.location}', style: _subtitleStyle()),
-      ]),
-    ),
-    const SizedBox(width: 8),
-    _phoneBtn(() => Constant.makePhoneCall(
-        order.vendor!.phonenumber.toString())),
-  ]);
+  Widget _buildPickupRow() {
+    final details = ctrl.activeDeliveryCharges.value;
+    final title = details?.outletName.trim().isNotEmpty == true
+        ? details!.outletName.trim()
+        : '${order.vendor?.title}';
+    final location = details?.outletAddress.trim().isNotEmpty == true
+        ? details!.outletAddress.trim()
+        : '${order.vendor?.location}';
+    final phone = details?.outletPhoneNumber.trim().isNotEmpty == true
+        ? details!.outletPhoneNumber.trim()
+        : (order.vendor?.phonenumber?.toString() ?? '');
+    return Row(children: [
+      _circleIcon('assets/icons/ic_building.svg', AppThemeData.primary50,
+          AppThemeData.primary300),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: _titleStyle()),
+          Text(location, style: _subtitleStyle()),
+        ]),
+      ),
+      if (phone.isNotEmpty) ...[
+        const SizedBox(width: 8),
+        _phoneBtn(() => Constant.makePhoneCall(phone)),
+      ],
+    ]);
+  }
 
   Widget _buildDeliveryTimeline() => Timeline.tileBuilder(
     shrinkWrap: true,
@@ -796,57 +963,86 @@ class _OrderCardContent extends StatelessWidget {
           AppThemeData.driverApp50, AppThemeData.driverApp300),
       connectorBuilder: (_, __, ___) => const DashedLineConnector(
           color: AppThemeData.grey300, gap: 3),
-      contentsBuilder: (ctx, i) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        child: i == 0
-            ? Row(children: [
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${order.vendor?.title}',
-                      style: _titleStyle()),
-                  Text(
-                    '${order.vendor?.location ?? 'N/A'}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: _subtitleStyle(),
-                  ),
-                ]),
-          ),
-          _phoneBtn(() => Constant.makePhoneCall(
-              order.vendor!.phonenumber.toString())),
-        ])
-            : Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Deliver to the'.tr, style: _titleStyle()),
-
-                  ExpandableAddressText(
-                    text: order.address?.getFullAddress() ?? 'N/A',
-                    style: _subtitleStyle(),
-                  ),
-                ],
+      contentsBuilder: (ctx, i) {
+        final details = ctrl.activeDeliveryCharges.value;
+        if (i == 0) {
+          final title = details?.outletName.trim().isNotEmpty == true
+              ? details!.outletName.trim()
+              : '${order.vendor?.title}';
+          final location = details?.outletAddress.trim().isNotEmpty == true
+              ? details!.outletAddress.trim()
+              : '${order.vendor?.location ?? 'N/A'}';
+          final phone = details?.outletPhoneNumber.trim().isNotEmpty == true
+              ? details!.outletPhoneNumber.trim()
+              : (order.vendor?.phonenumber?.toString() ?? '');
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: _titleStyle()),
+                      Text(
+                        location,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _subtitleStyle(),
+                      ),
+                    ]),
               ),
-            ),
+              if (phone.isNotEmpty)
+                _phoneBtn(() => Constant.makePhoneCall(phone)),
+            ]),
+          );
+        }
 
-            _phoneBtn(() async {
-              ShowToastDialog.showLoader('Please wait'.tr);
-              final c = await FireStoreUtils.getUserProfile(
-                  order.authorID.toString());
-              ShowToastDialog.closeLoader();
-              if (c?.phoneNumber != null) {
-                Constant.makePhoneCall(c!.phoneNumber!);
-              }
-            }),
-
-            const SizedBox(width: 8),
-            // _chatBtn(ctx),
-          ],
-        ),      ),
+        final customerName = details?.customerName.trim() ?? '';
+        final customerAddress =
+            details?.customerAddress.trim().isNotEmpty == true
+                ? details!.customerAddress.trim()
+                : (order.address?.getFullAddress() ?? 'N/A');
+        final customerPhone = details?.customerPhoneNumber.trim() ?? '';
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customerName.isNotEmpty
+                          ? customerName
+                          : 'Deliver to the'.tr,
+                      style: _titleStyle(),
+                    ),
+                    ExpandableAddressText(
+                      text: customerAddress,
+                      style: _subtitleStyle(),
+                    ),
+                  ],
+                ),
+              ),
+              _phoneBtn(() async {
+                if (customerPhone.isNotEmpty) {
+                  Constant.makePhoneCall(customerPhone);
+                  return;
+                }
+                ShowToastDialog.showLoader('Please wait'.tr);
+                final c = await FireStoreUtils.getUserProfile(
+                    order.authorID.toString());
+                ShowToastDialog.closeLoader();
+                if (c?.phoneNumber != null) {
+                  Constant.makePhoneCall(c!.phoneNumber!);
+                }
+              }),
+              const SizedBox(width: 8),
+              // _chatBtn(ctx),
+            ],
+          ),
+        );
+      },
       itemCount: 2,
     ),
   );

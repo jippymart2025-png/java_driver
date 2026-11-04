@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/services/api_cache_service.dart';
+import 'package:jippydriver_driver/services/order_detail_service.dart';
 import 'package:jippydriver_driver/app/chat_screens/ChatVideoContainer.dart';
 import 'package:jippydriver_driver/app/wallet_screen/screens/model/delivery_amount_model.dart';
 import 'package:jippydriver_driver/constant/constant.dart';
@@ -1443,6 +1444,11 @@ class FireStoreUtils {
 
 
   static Future<OrderModel?> getOrderById(String orderId) async {
+    // Primary endpoint: CO complete order details.
+    final completeOrder = await OrderDetailService.fetchOrder(orderId);
+    if (completeOrder != null) return completeOrder;
+
+    // Legacy endpoint (kept only as a fallback for older backends).
     OrderModel? orderModel;
     try {
       final response = await AuthHttpClient().get(
@@ -1451,13 +1457,11 @@ class FireStoreUtils {
           'Content-Type': 'application/json',
         },
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && !response.body.startsWith('<')) {
         final Map<String, dynamic> responseData = json.decode(response.body);
         orderModel = OrderModel.fromJson(responseData);
       } else if (response.statusCode == 404) {
         orderModel = null;
-      } else {
-        throw Exception('Failed to load order: ${response.statusCode}');
       }
     } catch (e, s) {
       log('APIUtils.getOrderById $e $s');
