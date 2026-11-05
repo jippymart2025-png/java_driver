@@ -89,6 +89,61 @@ class OrderModel {
     //Newly added
   });
 
+  /// Normalizes the Java backend's raw order-status tokens (e.g.
+  /// `DRIVER_PENDING`, `DRIVER_ACCEPTED`, `DRIVER_PICKS_UP`,
+  /// `ORDER_COMPLETED`) to the display strings the driver app compares
+  /// against ([Constant.driverPending] and friends).
+  ///
+  /// Values that are already display strings (e.g. `"Driver Pending"`) are
+  /// returned unchanged, so this is safe to run on every order source.
+  static String? mapStatus(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty || raw.toLowerCase() == 'null') return null;
+
+    switch (raw.toUpperCase()) {
+      case 'PLACED':
+      case 'ORDER_PLACED':
+        return Constant.orderPlaced;
+      case 'ACCEPTED':
+      case 'ORDER_ACCEPTED':
+      case 'MERCHANT_ACCEPTED':
+        return Constant.orderAccepted;
+      case 'PENDING':
+      case 'DRIVER_PENDING':
+      case 'WAITING_FOR_DRIVER':
+        return Constant.driverPending;
+      case 'DRIVER_ACCEPTED':
+        return Constant.driverAccepted;
+      case 'DRIVER_REACHED':
+        return Constant.orderShipped;
+      case 'SHIPPED':
+      case 'ORDER_SHIPPED':
+        return Constant.orderShipped;
+      case 'PICKED_UP':
+      case 'ORDER_PICKED_UP':
+      case 'DRIVER_PICKED_UP':
+      case 'DRIVER_PICKS_UP':
+      case 'IN_TRANSIT':
+      case 'OUT_FOR_DELIVERY':
+        return Constant.orderInTransit;
+      case 'COMPLETED':
+      case 'DELIVERED':
+      case 'ORDER_COMPLETED':
+        return Constant.orderCompleted;
+      case 'CANCELLED':
+      case 'CANCELED':
+      case 'ORDER_CANCELLED':
+        return Constant.orderCancelled;
+      case 'ORDER_REJECTED':
+        return Constant.orderRejected;
+      case 'REJECTED':
+      case 'DRIVER_REJECTED':
+        return Constant.driverRejected;
+    }
+    return raw;
+  }
+
   /// Maps the Java backend's `/api/co/customers/getOrderCompleteDetails`
   /// response (`CoOrderCompleteDetailsResponseDto`) into an [OrderModel].
   ///
@@ -132,44 +187,6 @@ class OrderModel {
         if (parsed != null) return Timestamp.fromDate(parsed);
       }
       return null;
-    }
-
-    String? mapStatus(dynamic value) {
-      final raw = asText(value);
-      if (raw == null) return null;
-      switch (raw.toUpperCase()) {
-        case 'PLACED':
-        case 'ORDER_PLACED':
-          return Constant.orderPlaced;
-        case 'ACCEPTED':
-        case 'ORDER_ACCEPTED':
-        case 'MERCHANT_ACCEPTED':
-          return Constant.orderAccepted;
-        case 'PENDING':
-        case 'DRIVER_PENDING':
-          return Constant.driverPending;
-        case 'DRIVER_ACCEPTED':
-          return Constant.driverAccepted;
-        case 'SHIPPED':
-        case 'ORDER_SHIPPED':
-          return Constant.orderShipped;
-        case 'IN_TRANSIT':
-        case 'OUT_FOR_DELIVERY':
-          return Constant.orderInTransit;
-        case 'COMPLETED':
-        case 'DELIVERED':
-        case 'ORDER_COMPLETED':
-          return Constant.orderCompleted;
-        case 'CANCELLED':
-        case 'CANCELED':
-        case 'ORDER_CANCELLED':
-          return Constant.orderCancelled;
-        case 'ORDER_REJECTED':
-          return Constant.orderRejected;
-        case 'DRIVER_REJECTED':
-          return Constant.driverRejected;
-      }
-      return raw;
     }
 
     String? joinParts(Iterable<dynamic> values) {
@@ -374,7 +391,7 @@ class OrderModel {
       address = null;
     }
     /////status = json['status'];
-    status = json['status'] ?? json['orderStatus'];
+    status = mapStatus(json['status'] ?? json['orderStatus']);
     couponId = json['couponId'];
     vendorID = json['vendorID']?.toString();
     driverID = json['driverID']?.toString();

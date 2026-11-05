@@ -72,7 +72,7 @@ class OrderDetailService {
 
     return OrderModel()
       ..id = details.orderId.isNotEmpty ? details.orderId : orderId
-      ..status = details.statusCode.isNotEmpty ? details.statusCode : null
+      ..status = OrderModel.mapStatus(details.statusCode)
       ..vendorID = details.outletName
       ..vendor = vendor
       ..address = ShippingAddress(

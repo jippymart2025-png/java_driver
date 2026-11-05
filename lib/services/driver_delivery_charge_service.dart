@@ -28,8 +28,10 @@ class DriverDeliveryChargeService {
     if (id.isEmpty) return null;
 
     final queryParams = <String, String>{
-      'driverLatitude': driverLatitude.toString(),
-      'driverLongitude': driverLongitude.toString(),
+       'driverLatitude': "16.3087",
+      // 'driverLatitude': driverLatitude.toString(),
+      // 'driverLongitude': driverLongitude.toString(),
+      'driverLongitude': "80.4385",
       'orderId': id,
     };
 
@@ -99,12 +101,16 @@ class DriverDeliveryChargeService {
           ?.toString()
           .trim() ??
           '';
-      final normalisedStatus = statusCode.toLowerCase();
-      final statusIsSuccess = statusCode.isEmpty ||
-          statusCode == '200' ||
-          normalisedStatus == 'success' ||
-          normalisedStatus == 'ok';
-      if (!statusIsSuccess) {
+      // On this endpoint the same keys can carry the *order* status (e.g.
+      // "DRIVER_PENDING") instead of an API result. Only treat HTTP-like
+      // failures as errors so a valid order payload is not discarded.
+      final numericCode = int.tryParse(statusCode);
+      final normalizedStatus = statusCode.toLowerCase();
+      final isApiFailure = (numericCode != null && numericCode != 200) ||
+          normalizedStatus == 'failed' ||
+          normalizedStatus == 'failure' ||
+          normalizedStatus == 'error';
+      if (isApiFailure) {
         AppLogger.log(
           'Delivery charges API returned status "$statusCode" for order $id',
           tag: 'API',

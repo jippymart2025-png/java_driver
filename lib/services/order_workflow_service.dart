@@ -556,8 +556,10 @@ class OrderWorkflowService {
         'orderId': id,
         'driverId': driverId,
         'status': status,
-        'driverLatitude': latitude.toString(),
-        'driverLongitude': longitude.toString(),
+        // 'driverLatitude': latitude.toString(),
+        // 'driverLongitude': longitude.toString(),
+        'driverLatitude': "16.3087",
+        'driverLongitude': "80.4385",
       };
 
       if (reason != null && reason.trim().isNotEmpty) {
