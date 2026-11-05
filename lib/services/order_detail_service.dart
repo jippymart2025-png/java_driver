@@ -24,34 +24,53 @@ class OrderDetailService {
   /// Returns the order, or `null` when it cannot be loaded. Callers may fall
   /// back to the legacy endpoints on `null`.
   static Future<OrderModel?> fetchOrder(String orderId) async {
+    final bundle = await fetchOrderBundle(orderId);
+    return bundle.order;
+  }
+
+  /// Fetches the order once and returns both the mapped [OrderModel] and the
+  /// raw charge details. Controllers can reuse the details for the popup
+  /// instead of calling `getDriverDeliveryChargesForOrder` a second time.
+  ///
+  /// Pass [knownDetails] when the charges are already cached to build the
+  /// [OrderModel] without another network request.
+  static Future<({OrderModel? order, DriverDeliveryChargeModel? details})>
+      fetchOrderBundle(
+    String orderId, {
+    DriverDeliveryChargeModel? knownDetails,
+  }) async {
     final id = orderId.trim();
-    if (id.isEmpty) return null;
+    if (id.isEmpty) return (order: null, details: null);
 
-    final details = await DriverDeliveryChargeService.fetchForOrder(
-      orderId: id,
-      driverLatitude: await _resolveLatitude() ?? 0.0,
-      driverLongitude: await _resolveLongitude() ?? 0.0,
-    );
+    var details = knownDetails;
+    if (details == null) {
+      final location = await _resolveDriverLocation();
+      details = await DriverDeliveryChargeService.fetchForOrder(
+        orderId: id,
+        driverLatitude: location.lat ?? 0.0,
+        driverLongitude: location.lng ?? 0.0,
+      );
+    }
 
-    if (details == null) return null;
+    if (details == null) return (order: null, details: null);
 
-    return _buildOrder(id, details);
+    return (order: _buildOrder(id, details), details: details);
   }
 
-  static Future<double?> _resolveLatitude() async {
-    final latitude = Constant.userModel?.location?.latitude ??
+  /// Resolves the driver location once, instead of once per coordinate.
+  static Future<({double? lat, double? lng})> _resolveDriverLocation() async {
+    var latitude = Constant.userModel?.location?.latitude ??
         Constant.locationDataFinal?.latitude;
-    if (latitude != null) return latitude;
-    final position = await Utils.getCurrentLocation();
-    return position?.latitude;
-  }
-
-  static Future<double?> _resolveLongitude() async {
-    final longitude = Constant.userModel?.location?.longitude ??
+    var longitude = Constant.userModel?.location?.longitude ??
         Constant.locationDataFinal?.longitude;
-    if (longitude != null) return longitude;
-    final position = await Utils.getCurrentLocation();
-    return position?.longitude;
+
+    if (latitude == null || longitude == null) {
+      final position = await Utils.getCurrentLocation();
+      latitude ??= position?.latitude;
+      longitude ??= position?.longitude;
+    }
+
+    return (lat: latitude, lng: longitude);
   }
 
   /// Maps the `getDriverDeliveryChargesForOrder` DTO into the
@@ -86,6 +105,7 @@ class OrderDetailService {
       )
       ..deliveryCharge =
           details.deliveryCharge > 0 ? details.deliveryCharge.toString() : null
+      ..paymentMethod = details.codAvailable ? 'cod' : 'online'
       ..tipAmount = details.tipAmount > 0 ? details.tipAmount.toString() : null
       ..toPay = details.orderTotalAmount > 0 ? details.orderTotalAmount.toString() : null
       ..pickUpDistanceInKms =

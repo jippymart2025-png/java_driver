@@ -11,6 +11,7 @@ import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/services/audio_player_service.dart';
 import 'package:jippydriver_driver/services/auth_http_client.dart';
 import 'package:jippydriver_driver/services/driver_delivery_charge_service.dart';
+import 'package:jippydriver_driver/services/order_detail_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
@@ -212,14 +213,28 @@ class HomeScreenMultipleOrderController extends GetxController {
       return (order: null, details: null);
     }
 
-    // Start the charge call in the background so a slow route calculation
-    // never blocks the order card from rendering. When the response arrives,
-    // the RxMap update rebuilds the list and the cached details are shown.
-    if (chargesFor(orderId) == null) {
-      unawaited(loadDeliveryChargesFor(orderId));
+    // Reuse the cached charges to build the order locally. Otherwise the
+    // bundle call fetches the order and charges in a single network request.
+    final cached = chargesFor(orderId);
+    final bundle = await OrderDetailService.fetchOrderBundle(
+      orderId,
+      knownDetails: cached,
+    );
+
+    final details = bundle.details;
+    if (details != null) {
+      _chargesRetryAfter.remove(orderId);
+      deliveryCharges[orderId] = details;
+      deliveryCharges.refresh();
     }
+
+    if (bundle.order != null) {
+      return (order: bundle.order, details: details);
+    }
+
+    // Legacy fallback for deployments without the driver charges endpoint.
     final order = await FireStoreUtils.getOrderById(orderId);
-    return (order: order, details: chargesFor(orderId));
+    return (order: order, details: details ?? chargesFor(orderId));
   }
 
   acceptOrder(OrderModel currentOrder) async {
@@ -243,7 +258,7 @@ class HomeScreenMultipleOrderController extends GetxController {
       );
       ShowToastDialog.closeLoader();
       // Handle rate limiting (429)
-      if (assignResult == null) {
+      if (assignResult.success == null) {
         Get.snackbar(
           "Rate Limited",
           "Too many requests. Please wait a moment and try again.",
@@ -252,7 +267,21 @@ class HomeScreenMultipleOrderController extends GetxController {
         );
         return; // Don't clear order, allow retry
       }
-      if (assignResult == true) {
+      if (assignResult.success == true) {
+        // Reuse the details from the accept response instead of issuing a
+        // second `getDriverDeliveryChargesForOrder` request.
+        final details = assignResult.details;
+        final acceptedId = currentOrder.id?.toString();
+        if (details != null && acceptedId != null && acceptedId.isNotEmpty) {
+          deliveryCharges[acceptedId] = details;
+          deliveryCharges.refresh();
+        }
+        if (acceptedId != null && acceptedId.isNotEmpty) {
+          newOrder.remove(acceptedId);
+          if (!activeOrder.contains(acceptedId)) {
+            activeOrder.add(acceptedId);
+          }
+        }
         if (currentOrder.author?.fcmToken != null) {
           await SendNotification.sendFcmMessage(
               Constant.driverAcceptedNotification,

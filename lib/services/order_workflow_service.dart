@@ -360,14 +360,43 @@ import 'dart:convert';
 
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/send_notification.dart';
+import 'package:jippydriver_driver/models/driver_delivery_charge_model.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
 import 'package:jippydriver_driver/services/auth_http_client.dart';
+import 'package:jippydriver_driver/services/driver_delivery_charge_service.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:jippydriver_driver/utils/common.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 
+/// Result of a driver order-status transition.
+///
+/// [success] keeps the previous semantics:
+/// * `null` — the backend rate-limited the call (HTTP 429)
+/// * `true` — accepted
+/// * `false` — failed / rejected
+///
+/// [details] is populated when the backend response also contains the order
+/// details DTO (the accept endpoint may return them directly).
+class OrderWorkflowResult {
+  final bool? success;
+  final dynamic details;
+  final String? errorCode;      // e.g. 'ALREADY_ACCEPTED', 'NO_LOCATION', 'GENERIC'
+  final String? errorMessage;
+
+  const OrderWorkflowResult({
+    this.success,
+    this.details,
+    this.errorCode,
+    this.errorMessage,
+  });
+
+  @override
+  String toString() =>
+      'OrderWorkflowResult(success: $success, errorCode: $errorCode, '
+          'errorMessage: $errorMessage)';
+}
 /// Centralized backend order workflow.
 class OrderWorkflowService {
   const OrderWorkflowService();
@@ -409,71 +438,116 @@ class OrderWorkflowService {
   // ACCEPT ORDER
   // ============================================================
 
-  static Future<bool?> acceptOrderBackend({
+  static Future<OrderWorkflowResult> acceptOrderBackend({
     required OrderModel order,
     required UserModel driverModel,
   }) async {
     final orderId = order.id?.toString().trim() ?? '';
     final driverId = driverModel.id?.toString().trim() ?? '';
 
-    if (orderId.isEmpty || driverId.isEmpty) {
-      AppLogger.log(
-        'Order ID or Driver ID missing',
-        tag: 'OrderWorkflow',
-      );
-      return false;
-    }
-
-    // Call Java Spring Boot API.
-    final result = await updateOrderStatusByDriver(
-      orderId: orderId,
-      status: 'ACCEPT',
-      driverModel: driverModel,
+    AppLogger.log(
+      'acceptOrderBackend START | orderId=$orderId | driverId=$driverId',
+      tag: 'OrderWorkflow',
     );
 
-    // Rate limited. Do not modify local state.
-    if (result == null) return null;
+    if (orderId.isEmpty || driverId.isEmpty) {
+      AppLogger.log(
+        'API NOT CALLED: Order ID or Driver ID missing',
+        tag: 'OrderWorkflow',
+      );
 
-    if (result == true) {
-      // Remove accepted order from request list.
-      driverModel.orderRequestData?.remove(orderId);
+      return const OrderWorkflowResult(success: false);
+    }
 
-      // Add order to driver's active orders.
+    try {
+      AppLogger.log(
+        'Calling updateOrderStatusByDriver NOW | '
+            'orderId=$orderId | status=ACCEPT',
+        tag: 'OrderWorkflow',
+      );
+
+      // Actual Java Spring Boot API call.
+      final result = await updateOrderStatusByDriver(
+        orderId: orderId,
+        status: 'ACCEPT',
+        driverModel: driverModel,
+      );
+
+      AppLogger.log(
+        'updateOrderStatusByDriver RESPONSE | '
+            'success=${result.success} | orderId=$orderId',
+        tag: 'OrderWorkflow',
+      );
+
+      if (result.success == null) {
+        AppLogger.log(
+          'API rate limited: $orderId',
+          tag: 'OrderWorkflow',
+        );
+
+        return const OrderWorkflowResult(success: null);
+      }
+
+      if (result.success != true) {
+        AppLogger.log(
+          'API returned failure for order: $orderId',
+          tag: 'OrderWorkflow',
+        );
+
+        return const OrderWorkflowResult(success: false);
+      }
+
+      // Update driver order lists.
+      driverModel.orderRequestData ??= [];
+
+      driverModel.orderRequestData!.removeWhere(
+            (id) => id.toString() == orderId,
+      );
+
       driverModel.inProgressOrderID ??= [];
 
       if (!driverModel.inProgressOrderID!.contains(orderId)) {
         driverModel.inProgressOrderID!.add(orderId);
       }
 
-      await FireStoreUtils.updateUser(driverModel);
-
-      // Invalidate cached API responses.
-      final httpClient = HttpClientService();
-
-      await httpClient.invalidateCache('orders/$orderId');
-      await httpClient.invalidateCache('users/');
-
       // Update local order.
       order.status = Constant.driverAccepted;
       order.driverID = driverId;
       order.driver = driverModel;
+
+      // These are follow-up operations, not the acceptance API itself.
+      try {
+        await FireStoreUtils.updateUser(driverModel);
+
+        final httpClient = HttpClientService();
+
+        await httpClient.invalidateCache('orders/$orderId');
+        await httpClient.invalidateCache('users/');
+      } catch (e) {
+        AppLogger.log(
+          'Post-accept sync/cache error: $e',
+          tag: 'OrderWorkflow',
+        );
+      }
 
       AppLogger.log(
         'Order $orderId successfully accepted by driver $driverId',
         tag: 'OrderWorkflow',
       );
 
-      return true;
+      return OrderWorkflowResult(
+        success: true,
+        details: result.details,
+      );
+    } catch (e, stackTrace) {
+      AppLogger.log(
+        'acceptOrderBackend API exception: $e\n$stackTrace',
+        tag: 'OrderWorkflow',
+      );
+
+      rethrow;
     }
-
-    AppLogger.log(
-      'Order $orderId acceptance failed',
-      tag: 'OrderWorkflow',
-    );
-
-    return false;
   }
-
   // ============================================================
   // REJECT ORDER
   // ============================================================
@@ -503,12 +577,12 @@ class OrderWorkflowService {
     );
 
     // Preserve the local order if the API fails.
-    if (result != true) {
+    if (result.success != true) {
       AppLogger.log(
         'Order $orderId rejection failed',
         tag: 'OrderWorkflow',
       );
-      return result;
+      return result.success;
     }
 
     // Remove order only after successful backend response.
@@ -534,7 +608,7 @@ class OrderWorkflowService {
   // COMMON ACCEPT / REJECT API
   // ============================================================
 
-  static Future<bool?> updateOrderStatusByDriver({
+  static Future<OrderWorkflowResult> updateOrderStatusByDriver({
     required String orderId,
     required String status,
     required UserModel driverModel,
@@ -546,7 +620,7 @@ class OrderWorkflowService {
     final driverId = driverModel.id?.toString().trim() ?? '';
 
     if (id.isEmpty || driverId.isEmpty) {
-      return false;
+      return const OrderWorkflowResult(success: false);
     }
 
     try {
@@ -576,7 +650,7 @@ class OrderWorkflowService {
           'Driver latitude or longitude unavailable',
           tag: 'OrderWorkflow',
         );
-        return false;
+        return const OrderWorkflowResult(success: false);
       }
 
       // Prepare query parameters exactly as defined in Swagger.
@@ -586,8 +660,8 @@ class OrderWorkflowService {
         'status': status,
         // 'driverLatitude': latitude.toString(),
         // 'driverLongitude': longitude.toString(),
-        'driverLatitude': "16.3087",
-        'driverLongitude': "80.4385",
+        'driverLatitude': "16.3080",
+        'driverLongitude': "80.4490",
       };
 
       if (reason != null && reason.trim().isNotEmpty) {
@@ -626,7 +700,7 @@ class OrderWorkflowService {
 
       // Rate limit.
       if (response.statusCode == 429) {
-        return null;
+        return const OrderWorkflowResult(success: null);
       }
 
       // HTTP failure.
@@ -636,12 +710,12 @@ class OrderWorkflowService {
           'API failed: ${response.statusCode} ${response.body}',
           tag: 'OrderWorkflow',
         );
-        return false;
+        return const OrderWorkflowResult(success: false);
       }
 
       // Some successful endpoints return an empty response.
       if (response.body.trim().isEmpty) {
-        return true;
+        return const OrderWorkflowResult(success: true);
       }
 
       if (response.body.trim().startsWith('<')) {
@@ -649,16 +723,20 @@ class OrderWorkflowService {
           'Unexpected HTML response from driver API',
           tag: 'OrderWorkflow',
         );
-        return false;
+        return const OrderWorkflowResult(success: false);
       }
 
       final decoded = jsonDecode(response.body);
 
       if (decoded is! Map) {
-        return true;
+        return const OrderWorkflowResult(success: true);
       }
 
       final root = Map<String, dynamic>.from(decoded);
+      final details = DriverDeliveryChargeService.parsePayload(
+        root,
+        fallbackOrderId: id,
+      );
 
       final data = _unwrapWorkflowData(root);
 
@@ -676,19 +754,22 @@ class OrderWorkflowService {
         tag: 'OrderWorkflow',
       );
 
-      return _isSuccessfulWorkflowStatus(statusCode);
+      return OrderWorkflowResult(
+        success: _isSuccessfulWorkflowStatus(statusCode),
+        details: details,
+      );
     } on TimeoutException {
       AppLogger.log(
         'Driver order API timeout: $id ($status)',
         tag: 'OrderWorkflow',
       );
-      return false;
+      return const OrderWorkflowResult(success: false);
     } catch (e, stackTrace) {
       AppLogger.log(
         'Driver order API exception: $e\n$stackTrace',
         tag: 'OrderWorkflow',
       );
-      return false;
+      return const OrderWorkflowResult(success: false);
     }
   }
 
@@ -877,7 +958,7 @@ class OrderWorkflowService {
       driverModel: fallbackDriver,
     );
 
-    return fallback == true;
+    return fallback.success == true;
   }
 
   // ============================================================

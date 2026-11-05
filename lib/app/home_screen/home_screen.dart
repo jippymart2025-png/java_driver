@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:android_pip/android_pip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:timelines_plus/timelines_plus.dart';
@@ -201,30 +200,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   bool _shouldShowDrawer(HomeController ctrl) {
     if (isInPipMode.value) return false;
-    final order  = ctrl.currentOrder.value;
-    final driver = ctrl.driverModel.value;
-
-    final inReq          =
-        driver.orderRequestData?.contains(order.id) ?? false;
-    final inProgressHere =
-        driver.inProgressOrderID?.contains(order.id) ?? false;
-    final noDriver       =
-        order.driverID == null || order.driverID!.isEmpty;
-    final acceptShow = order.id != null &&
-        !inProgressHere &&
-        (inReq ||
-            ctrl.isAcceptingOrder ||
-            order.status == Constant.driverPending ||
-            (order.status == Constant.orderAccepted && noDriver)) &&
-        noDriver &&
-        order.address != null &&
-        (order.vendor != null || (order.vendorID?.isNotEmpty ?? false));
-
-    final cardShow = order.id != null &&
-        (order.driverID == Constant.userModel?.id || inProgressHere) &&
-        (!inReq || order.status == Constant.driverPending);
-
-    return acceptShow || cardShow;
+    return ctrl.showAcceptRejectPopup || ctrl.showActiveOrderPopup;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -234,27 +210,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildBottomZone(DarkThemeProvider theme, HomeController ctrl) {
     if (isInPipMode.value) return _PipOverlay(ctrl: ctrl, theme: theme);
 
-    final order  = ctrl.currentOrder.value;
-    final driver = ctrl.driverModel.value;
-    final inReq          =
-        driver.orderRequestData?.contains(order.id) ?? false;
-    final inProgressHere =
-        driver.inProgressOrderID?.contains(order.id) ?? false;
-    final noDriver = order.driverID == null || order.driverID!.isEmpty;
-
-    final showAcceptReject = order.id != null &&
-        !inProgressHere &&
-        (inReq ||
-            ctrl.isAcceptingOrder ||
-            order.status == Constant.driverPending ||
-            (order.status == Constant.orderAccepted && noDriver)) &&
-        noDriver &&
-        order.address != null &&
-        (order.vendor != null || (order.vendorID?.isNotEmpty ?? false));
-
-    final showCard = order.id != null &&
-        (order.driverID == Constant.userModel?.id || inProgressHere) &&
-        (!inReq || order.status == Constant.driverPending);
+    final showAcceptReject = ctrl.showAcceptRejectPopup;
+    final showCard = ctrl.showActiveOrderPopup;
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
@@ -400,31 +357,16 @@ class _AcceptRejectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = ctrl.activeDeliveryCharges.value;
-    final vendor  = ctrl.currentOrder.value.vendor;
-    final address = ctrl.currentOrder.value.address;
-    final vLat    = details?.hasOutletCoordinates == true
-        ? details!.outletLatitude
-        : vendor?.latitudeValue;
-    final vLng    = details?.hasOutletCoordinates == true
-        ? details!.outletLongitude
-        : vendor?.longitudeValue;
-    final cLat    = details?.hasCustomerCoordinates == true
-        ? details!.customerLatitude
-        : address?.location?.latitude;
-    final cLng    = details?.hasCustomerCoordinates == true
-        ? details!.customerLongitude
-        : address?.location?.longitude;
-    double km     = 0.0;
-    if (vLat != null &&
-        vLng != null &&
-        cLat != null &&
-        cLng != null) {
-      km = Geolocator.distanceBetween(vLat, vLng, cLat, cLng) / 1000;
-    }
-    if (details != null && details.deliveryDistanceKm > 0) {
-      km = details.deliveryDistanceKm;
-    }
+    final order   = ctrl.currentOrder.value;
+    final details = ctrl.currentDeliveryCharges;
+    final vendor  = order.vendor;
+    final address = order.address;
+
+    // Backend distance only — no local route/distance estimation.
+    final backendKm = details?.deliveryDistanceKm ?? 0.0;
+    final km = backendKm > 0
+        ? backendKm
+        : (order.deliveryDistanceInKms ?? 0.0);
 
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -624,50 +566,47 @@ class _ChargeBreakdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final details = ctrl.activeDeliveryCharges.value;
+      final order = ctrl.currentOrder.value;
+      final details = ctrl.currentDeliveryCharges;
       if (details != null && details.hasChargeData) {
         return _apiBreakdown(details);
       }
-
-      final tip      = double.tryParse(
-          ctrl.currentOrder.value.tipAmount?.toString() ?? '0') ??
-          0.0;
-      final surge    = ctrl.surgeFee.value;
-      final hasSurge = surge > 0;
-      final d2r      = ctrl.driverToRestaurantCharge.value;
-      final r2c      = ctrl.restaurantToCustomerCharge.value;
-      final total    = d2r + r2c + tip + surge;
-      final isVendorDriver =
-          ctrl.driverModel.value.vendorID?.isEmpty == true;
-
-      return Column(children: [
-        // Distance
-        _row('Trip Distance'.tr,
-            '${km.toStringAsFixed(2)} ${Constant.distanceType}'),
-
-        // Tip
-        if (tip > 0) ...[
-          const SizedBox(height: 4),
-          _row('Tips'.tr, Constant.amountShow(amount: tip.toString())),
-        ],
-        const SizedBox(height: 6),
-
-        // Delivery charge breakdown
-        if (isVendorDriver) ...[
-          _row(
-            'Delivery Charge'.tr,
-            '${d2r.toStringAsFixed(2)} + ${r2c.toStringAsFixed(2)} = ${(d2r + r2c).toStringAsFixed(2)}',
-          ),
-          const SizedBox(height: 4),
-        ],
-
-        // Surge
-        if (hasSurge) _surgeRow(surge),
-
-        const SizedBox(height: 8),
-        _totalEarningsBox(total),
-      ]);
+      return _orderFallback(order);
     });
+  }
+
+  /// Uses the order fields cached from the backend while the detailed charge
+  /// response is still loading. No local estimation is performed.
+  Widget _orderFallback(OrderModel order) {
+    final pickupDistance = order.pickUpDistanceInKms ?? 0.0;
+    final deliveryDistance = order.deliveryDistanceInKms ?? 0.0;
+    final totalDistance = pickupDistance > 0 || deliveryDistance > 0
+        ? pickupDistance + deliveryDistance
+        : km;
+    final pickupCharge = (order.pickUpCharges ?? 0).toDouble();
+    final deliveryCharge = (order.deliverCharges ?? 0).toDouble();
+    final tip = double.tryParse(order.tipAmount?.toString() ?? '0') ?? 0.0;
+
+    return Column(children: [
+      _row('Trip Distance'.tr,
+          '${totalDistance.toStringAsFixed(2)} ${Constant.distanceType}'),
+      if (pickupCharge > 0) ...[
+        const SizedBox(height: 4),
+        _row('Pickup Charge'.tr,
+            Constant.amountShow(amount: pickupCharge.toString())),
+      ],
+      if (deliveryCharge > 0) ...[
+        const SizedBox(height: 4),
+        _row('Delivery Charge'.tr,
+            Constant.amountShow(amount: deliveryCharge.toString())),
+      ],
+      if (tip > 0) ...[
+        const SizedBox(height: 4),
+        _row('Tips'.tr, Constant.amountShow(amount: tip.toString())),
+      ],
+      const SizedBox(height: 8),
+      _totalEarningsBox(pickupCharge + deliveryCharge + tip),
+    ]);
   }
 
   Widget _apiBreakdown(DriverDeliveryChargeModel d) {
@@ -704,7 +643,6 @@ class _ChargeBreakdown extends StatelessWidget {
       const SizedBox(height: 8),
       _totalEarningsBox(
         d.effectiveDriverCharge,
-        apiTotal: true,
         label: 'Total Driver Charge'.tr,
       ),
     ]);
@@ -767,45 +705,7 @@ class _ChargeBreakdown extends StatelessWidget {
     ]),
   );
 
-  Widget _surgeRow(double surge) => Container(
-    margin: const EdgeInsets.only(bottom: 4),
-    padding:
-    const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-    decoration: BoxDecoration(
-      color: AppThemeData.success50.withOpacity(0.3),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Row(children: [
-      Expanded(
-        child: Row(children: [
-          Text('Surge Fee'.tr,
-              style: TextStyle(
-                fontFamily: AppThemeData.regular,
-                color: theme.getThem()
-                    ? AppThemeData.grey300
-                    : AppThemeData.grey600,
-                fontSize: 15,
-              )),
-          const SizedBox(width: 6),
-          const Icon(Icons.trending_up_rounded,
-              color: AppThemeData.success400, size: 16),
-        ]),
-      ),
-      Text('+${surge.toStringAsFixed(2)}',
-          style: const TextStyle(
-            fontFamily: AppThemeData.semiBold,
-            color: AppThemeData.success500,
-            fontSize: 16,
-          )),
-    ]),
-  );
-
-  Widget _totalEarningsBox(
-    double total, {
-    bool apiTotal = false,
-    String? label,
-  }) =>
-      Container(
+  Widget _totalEarningsBox(double total, {String? label}) => Container(
     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
     decoration: BoxDecoration(
       color: AppThemeData.primary50.withOpacity(0.2),
@@ -824,9 +724,7 @@ class _ChargeBreakdown extends StatelessWidget {
             )),
       ),
       Text(
-        apiTotal
-            ? Constant.amountShow(amount: total.toString())
-            : total.toStringAsFixed(2),
+        Constant.amountShow(amount: total.toString()),
         style: const TextStyle(
           fontFamily: AppThemeData.bold,
           color: AppThemeData.primary500,
@@ -923,7 +821,7 @@ class _OrderCardContent extends StatelessWidget {
   }
 
   Widget _buildPickupRow() {
-    final details = ctrl.activeDeliveryCharges.value;
+    final details = ctrl.currentDeliveryCharges;
     final title = details?.outletName.trim().isNotEmpty == true
         ? details!.outletName.trim()
         : '${order.vendor?.title}';
@@ -965,7 +863,7 @@ class _OrderCardContent extends StatelessWidget {
       connectorBuilder: (_, __, ___) => const DashedLineConnector(
           color: AppThemeData.grey300, gap: 3),
       contentsBuilder: (ctx, i) {
-        final details = ctrl.activeDeliveryCharges.value;
+        final details = ctrl.currentDeliveryCharges;
         if (i == 0) {
           final title = details?.outletName.trim().isNotEmpty == true
               ? details!.outletName.trim()

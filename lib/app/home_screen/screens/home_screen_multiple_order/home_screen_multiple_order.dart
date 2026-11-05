@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:timelines_plus/timelines_plus.dart';
@@ -283,7 +282,6 @@ class _OrderBundleCard extends StatelessWidget {
               themeChange: themeChange,
               order: order,
               details: details,
-              fallbackDistanceKm: _fallbackDistanceKm(),
             ),
             const SizedBox(height: 5),
             _TipRow(
@@ -350,20 +348,6 @@ class _OrderBundleCard extends StatelessWidget {
       );
     }
     return card;
-  }
-
-  double _fallbackDistanceKm() {
-    final vLat = order?.vendor?.latitudeValue ?? order?.vendor?.latitude;
-    final vLng = order?.vendor?.longitudeValue ?? order?.vendor?.longitude;
-    final cLat = order?.address?.location?.latitude;
-    final cLng = order?.address?.location?.longitude;
-    if (vLat != null &&
-        vLng != null &&
-        cLat != null &&
-        cLng != null) {
-      return Geolocator.distanceBetween(vLat, vLng, cLat, cLng) / 1000;
-    }
-    return 0.0;
   }
 
   double _tipAmount() {
@@ -501,13 +485,11 @@ class _DistanceAndCharges extends StatelessWidget {
   final DarkThemeProvider themeChange;
   final OrderModel? order;
   final DriverDeliveryChargeModel? details;
-  final double fallbackDistanceKm;
 
   const _DistanceAndCharges({
     required this.themeChange,
     required this.order,
     required this.details,
-    required this.fallbackDistanceKm,
   });
 
   @override
@@ -560,20 +542,43 @@ class _DistanceAndCharges extends StatelessWidget {
   }
 
   Widget _fallbackDetails() {
-    final deliveryCharge = order?.deliveryCharge?.trim() ?? '';
-    final hasDeliveryCharge = deliveryCharge.isNotEmpty &&
-        (double.tryParse(deliveryCharge) ?? 0) > 0;
+    final pickupDistance = order?.pickUpDistanceInKms ?? 0.0;
+    final deliveryDistance = order?.deliveryDistanceInKms ?? 0.0;
+    final totalDistance = pickupDistance + deliveryDistance;
+    final pickupCharge = (order?.pickUpCharges ?? 0).toDouble();
+    final deliveryCharge = (order?.deliverCharges ?? 0).toDouble();
+    final tip = double.tryParse(order?.tipAmount?.toString() ?? '0') ?? 0.0;
+    final total = pickupCharge + deliveryCharge + tip;
+
     return Column(
       children: [
-        _row(
-          "Trip Distance".tr,
-          '${fallbackDistanceKm.toStringAsFixed(2)} ${Constant.distanceType}',
-        ),
-        if (hasDeliveryCharge)
+        if (totalDistance > 0)
+          _row(
+            "Trip Distance".tr,
+            '${totalDistance.toStringAsFixed(2)} ${Constant.distanceType}',
+          ),
+        if (pickupCharge > 0)
+          _row(
+            "Pickup Charge".tr,
+            Constant.amountShow(amount: pickupCharge.toString()),
+          ),
+        if (deliveryCharge > 0)
           _row(
             "Delivery Charge".tr,
-            Constant.amountShow(amount: deliveryCharge),
+            Constant.amountShow(amount: deliveryCharge.toString()),
           ),
+        if (tip > 0)
+          _row(
+            "Tips".tr,
+            Constant.amountShow(amount: tip.toString()),
+          ),
+        if (total > 0) ...[
+          const SizedBox(height: 6),
+          _totalRow(
+            "Total Driver Charge".tr,
+            Constant.amountShow(amount: total.toString()),
+          ),
+        ],
       ],
     );
   }

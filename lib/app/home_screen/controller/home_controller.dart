@@ -35,7 +35,7 @@ import 'package:latlong2/latlong.dart' as location;
 import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:typed_data';
-import 'package:jippydriver_driver/services/auth_http_client.dart';
+import 'package:location_platform_interface/location_platform_interface.dart';
 
 // ---------------------------------------------------------------------------
 //  Lightweight cancel token
@@ -45,17 +45,6 @@ class CancelToken {
   bool get isCancelled => _isCancelled;
   void cancel() => _isCancelled = true;
   void reset()  => _isCancelled = false;
-}
-
-// ---------------------------------------------------------------------------
-//  Leg-distance fallback entry (short-lived, not promoted to primary cache)
-// ---------------------------------------------------------------------------
-class _LegFallback {
-  final double km;
-  final DateTime at;
-  _LegFallback(this.km) : at = DateTime.now();
-  bool get isStale =>
-      DateTime.now().difference(at) > const Duration(seconds: 30);
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +63,6 @@ class HomeController extends GetxController {
   final RxDouble restaurantToCustomerDuration = 0.0.obs;
   final RxDouble driverToRestaurantCharge     = 0.0.obs;
   final RxDouble restaurantToCustomerCharge   = 0.0.obs;
-  double _restaurantToCustomerBillableKm = 0;
   final RxDouble totalCalculatedCharge        = 0.0.obs;
   final RxDouble surgeFee                     = 0.0.obs;
   final RxDouble creditedBonus = 0.0.obs;
@@ -102,46 +90,6 @@ class HomeController extends GetxController {
   /// lists are temporarily out of date.
   String? _serverActiveOrderId;
 
-
-  // ── Charge coefficients ───────────────────────────────────────────────
-  double _pickupRsPerKm               = 3.0;
-  double _deliveryFirstSlabKm         = 4.0;
-  double _deliveryRsPerKmFirstSlab    = 8.0;
-  double _deliveryRsPerKmBeyond       = 10.0;
-  double _deliveryShortTripMaxKm      = 2.0;
-  double _deliveryShortTripBaseCharge = 21.0;
-
-  double _pickupChargeFromKm(double km) {
-    if (km <= 0) return 0;
-    final billableKm = km.ceilToDouble();
-    return (billableKm * _pickupRsPerKm).roundToDouble();
-  }
-
-  double _billableRestaurantToCustomerKm(double rawKm) {
-    if (rawKm <= 0) return 0;
-    final rounded = rawKm.roundToDouble();
-    return math.max(1.0, rounded);
-  }
-
-  double _restaurantToCustomerChargeFromBillableKm(double billableKm) {
-    if (billableKm <= 0) return 0;
-    if (_deliveryShortTripMaxKm > 0 && billableKm <= _deliveryShortTripMaxKm) {
-      return _deliveryShortTripBaseCharge;
-    }
-    if (billableKm <= _deliveryFirstSlabKm) {
-      final proRata = (billableKm * _deliveryRsPerKmFirstSlab).roundToDouble();
-      final slab    = math.max(_deliveryRsPerKmFirstSlab, proRata).toDouble();
-      if (_deliveryShortTripMaxKm > 0) {
-        return math.max(_deliveryShortTripBaseCharge, slab);
-      }
-      return slab;
-    }
-    final beyondKm         = billableKm - _deliveryFirstSlabKm;
-    final billableBeyondKm = beyondKm.ceil();
-    final block = _deliveryFirstSlabKm * _deliveryRsPerKmFirstSlab +
-        billableBeyondKm * _deliveryRsPerKmBeyond;
-    return block.roundToDouble();
-  }
 
   // ── Core observables ──────────────────────────────────────────────────
   final Rx<OrderModel> currentOrder = OrderModel().obs;
@@ -196,18 +144,6 @@ class HomeController extends GetxController {
   static const double   _coordPrecision      = 0.005;
   static const int      _maxDisplayPoints    = 80;
 
-  // ── Leg-distance cache ────────────────────────────────────────────────
-  // Primary cache: only holds successful Google API results.
-  // Key: "lat1,lng1->lat2,lng2" (snapped to 4 dp ≈ 11 m).
-  // Cleared when a new order is loaded.
-  final Map<String, double>      _legDistanceCache  = {};
-
-  // Fallback cache: short-lived straight-line values used when the API
-  // fails or all candidates exceed the sanity cap. These are NEVER promoted
-  // to _legDistanceCache, so the API is retried on the next
-  // calculateOrderChargesInitial call once the 30-second TTL expires.
-  final Map<String, _LegFallback> _legFallbackCache = {};
-
   // ── Polling ───────────────────────────────────────────────────────────
   Timer?   _pollTimer;
   bool     _isPolling       = false;
@@ -255,20 +191,17 @@ class HomeController extends GetxController {
   static const Duration _changeDataDelay = Duration(milliseconds: 150);
 
   // ── Guards ────────────────────────────────────────────────────────────
+  // ── Guards ────────────────────────────────────────────────────────────
   bool      _isAcceptingOrder            = false;
   bool      _isRejectingOrder            = false;
   bool get  isAcceptingOrder             => _isAcceptingOrder;
-  bool      _isCalculatingCharges        = false;
-  bool      _driverChargesWarmupInFlight = false;
-  bool      _driverChargesApplied        = false;
-  DateTime? _driverChargesAppliedAt;
-  bool      _hasCalculatedBaseCharges    = false;
-  bool      _driverChargesNeedsRecalc    = false;
   Timer?    _chargesRecalcDebounce;
   DateTime? _lastGetOrderTime;
   static const Duration _minOrderInterval = Duration(seconds: 2);
-  String?   _lastFetchedOrderId;
-  String?   _chargesComputedForOrderId;
+
+  // ── Accept fail cooldown ──────────────────────────────────────────────
+  DateTime? _lastAcceptFailAt;
+  static const Duration _acceptFailCooldown = Duration(seconds: 3);
 
   // ── Polyline points ───────────────────────────────────────────────────
   Rx<PolylinePoints> polylinePoints =
@@ -308,72 +241,123 @@ class HomeController extends GetxController {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  Driver charges warm-up
-  // ══════════════════════════════════════════════════════════════════════
-
-  // Future<void> _warmUpDriverCharges() async {
-  //   if (_driverChargesWarmupInFlight || _driverChargesApplied) return;
-  //   _driverChargesWarmupInFlight = true;
-  //   try {
-  //     final c = await FireStoreUtils.getDriverCharges(forceRefresh: true);
-  //
-  //     double toDouble(dynamic v, double fallback) {
-  //       if (v == null) return fallback;
-  //       if (v is num) return v.toDouble();
-  //       if (v is String) return double.tryParse(v.trim()) ?? fallback;
-  //       return fallback;
-  //     }
-  //
-  //     final pickup               = toDouble(c['pickup_rs_per_km'],                _pickupRsPerKm);
-  //     final deliveryFirstSlabKm  = toDouble(c['delivery_first_slab_km'],          _deliveryFirstSlabKm);
-  //     final deliveryRsPerKmFirst = toDouble(c['delivery_rs_per_km_first_slab'],   _deliveryRsPerKmFirstSlab);
-  //     final deliveryRsPerKmBeyond= toDouble(c['delivery_rs_per_km_beyond'],       _deliveryRsPerKmBeyond);
-  //     final shortTripMaxKm       = toDouble(c['delivery_short_trip_max_km'],      _deliveryShortTripMaxKm);
-  //     final shortTripBaseCharge  = toDouble(c['delivery_short_trip_base_charge'], _deliveryShortTripBaseCharge);
-  //
-  //     AppLogger.log(
-  //       'Driver charges warmup: pickup=$pickup firstSlab=${deliveryFirstSlabKm}km '
-  //           '@${deliveryRsPerKmFirst}/km beyond=${deliveryRsPerKmBeyond}/km '
-  //           'short≤${shortTripMaxKm}km=flat₹$shortTripBaseCharge',
-  //       tag: 'Charges',
-  //     );
-  //
-  //     final changed = pickup              != _pickupRsPerKm            ||
-  //         deliveryFirstSlabKm             != _deliveryFirstSlabKm      ||
-  //         deliveryRsPerKmFirst            != _deliveryRsPerKmFirstSlab ||
-  //         deliveryRsPerKmBeyond           != _deliveryRsPerKmBeyond    ||
-  //         shortTripMaxKm                  != _deliveryShortTripMaxKm   ||
-  //         shortTripBaseCharge             != _deliveryShortTripBaseCharge;
-  //
-  //     _pickupRsPerKm             = pickup;
-  //     _deliveryFirstSlabKm       = deliveryFirstSlabKm;
-  //     _deliveryRsPerKmFirstSlab  = deliveryRsPerKmFirst;
-  //     _deliveryRsPerKmBeyond     = deliveryRsPerKmBeyond;
-  //     _deliveryShortTripMaxKm    = shortTripMaxKm;
-  //     _deliveryShortTripBaseCharge = shortTripBaseCharge;
-  //
-  //     _driverChargesApplied   = true;
-  //     _driverChargesAppliedAt = DateTime.now();
-  //
-  //     if (changed && currentOrder.value.id != null && currentOrder.value.vendor != null) {
-  //       if (_isCalculatingCharges) {
-  //         _driverChargesNeedsRecalc = true;
-  //       } else {
-  //         await calculateOrderChargesInitial(fetchSurgeAndToPay: false);
-  //         _updateOrderWithCharges();
-  //         currentOrder.refresh();
-  //       }
-  //     }
-  //   } catch (e) {
-  //     AppLogger.log('Driver charges warmup failed: $e', tag: 'Charges');
-  //   } finally {
-  //     _driverChargesWarmupInFlight = false;
-  //   }
-  // }
-
-  // ══════════════════════════════════════════════════════════════════════
   //  Today dashboard
   // ══════════════════════════════════════════════════════════════════════
+
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  Accept precondition — ensure usable driver coordinates
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Guarantees that the driver has usable GPS coordinates before the
+  /// ACCEPT API is called.
+  ///
+  /// The Java backend rejects the accept request with
+  /// "Driver latitude or longitude unavailable" when the coords are
+  /// missing, which used to surface as the misleading
+  /// "Order accepted by another driver" snackbar.
+  ///
+  /// Resolution order matches [_resolveDriverLatLngForCharges]:
+  /// 1. `driverLatLng`         (live position stream)
+  /// 2. `Constant.locationDataFinal`
+  /// 3. `driverModel.value.location`
+  /// 4. `Utils.getCurrentLocation()`  (fresh GPS fix)
+  /// 5. `Geolocator.getLastKnownPosition()`  (last resort)
+  Future<bool> _ensureDriverLocation() async {
+    if (_hasUsableDriverLocation()) return true;
+
+    AppLogger.log(
+      'Driver location missing on accept — attempting fresh fix',
+      tag: 'OrderWorkflow',
+    );
+
+    // Fresh GPS fix.
+    try {
+      final pos = await Utils.getCurrentLocation();
+      if (pos != null &&
+          _isUsableDriverCoord(pos.latitude, pos.longitude)) {
+        driverModel.value.location = UserLocation(
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+        );
+        driverLatLng.value = LatLng(pos.latitude, pos.longitude);
+        Constant.locationDataFinal = pos as LocationData?;
+        driverModel.refresh();
+
+        // Persist so the backend also sees fresh coordinates.
+        try {
+          await FireStoreUtils.updateUser(driverModel.value);
+        } catch (e) {
+          AppLogger.log(
+            '_ensureDriverLocation: updateUser failed: $e',
+            tag: 'OrderWorkflow',
+          );
+        }
+
+        AppLogger.log(
+          '_ensureDriverLocation: refreshed via Utils '
+              '(lat=${pos.latitude}, lng=${pos.longitude})',
+          tag: 'OrderWorkflow',
+        );
+        return true;
+      }
+    } catch (e) {
+      AppLogger.log(
+        '_ensureDriverLocation: Utils.getCurrentLocation error: $e',
+        tag: 'OrderWorkflow',
+      );
+    }
+
+    // Last known fix from the platform.
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null &&
+          _isUsableDriverCoord(last.latitude, last.longitude)) {
+        driverModel.value.location = UserLocation(
+          latitude: last.latitude,
+          longitude: last.longitude,
+        );
+        driverLatLng.value = LatLng(last.latitude, last.longitude);
+        driverModel.refresh();
+
+        try {
+          await FireStoreUtils.updateUser(driverModel.value);
+        } catch (_) {}
+
+        AppLogger.log(
+          '_ensureDriverLocation: refreshed via getLastKnownPosition '
+              '(lat=${last.latitude}, lng=${last.longitude})',
+          tag: 'OrderWorkflow',
+        );
+        return true;
+      }
+    } catch (e) {
+      AppLogger.log(
+        '_ensureDriverLocation: getLastKnownPosition error: $e',
+        tag: 'OrderWorkflow',
+      );
+    }
+
+    AppLogger.log(
+      'Driver location still unavailable after refresh',
+      tag: 'OrderWorkflow',
+    );
+    return false;
+  }
+
+  /// True if any of the three location sources has usable coordinates.
+  bool _hasUsableDriverLocation() {
+    final dl = driverLatLng.value;
+    if (_isUsableDriverCoord(dl?.latitude, dl?.longitude)) return true;
+
+    final lf = Constant.locationDataFinal;
+    if (_isUsableDriverCoord(lf?.latitude, lf?.longitude)) return true;
+
+    final loc = driverModel.value.location;
+    if (_isUsableDriverCoord(loc?.latitude, loc?.longitude)) return true;
+
+    return false;
+  }
 
   void ensureTodayDashboardLoaded() {
     final last = _todayDashboardLastFetchAt;
@@ -719,27 +703,8 @@ class HomeController extends GetxController {
     _cleanupCompletedIds();
     if (_recentlyCompleted.isEmpty) return;
     final ids = _recentlyCompleted.keys.toSet();
-    m.inProgressOrderID?.removeWhere((id) => ids.contains(id?.toString()));
-    m.orderRequestData?.removeWhere((id) => ids.contains(id?.toString()));
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  Leg-cache helpers
-  // ══════════════════════════════════════════════════════════════════════
-
-  void _clearLegCaches() {
-    _legDistanceCache.clear();
-    _legFallbackCache.clear();
-  }
-
-  double _straightLineKm(LatLng origin, LatLng destination) {
-    return Geolocator.distanceBetween(
-          origin.latitude,
-          origin.longitude,
-          destination.latitude,
-          destination.longitude,
-        ) /
-        1000;
+    m.inProgressOrderID.removeWhere((id) => ids.contains(id.toString()));
+    m.orderRequestData.removeWhere((id) => ids.contains(id?.toString()));
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -804,17 +769,43 @@ class HomeController extends GetxController {
       // in flight; never attach stale details to the new order.
       if (currentOrder.value.id != id) return;
 
-      _deliveryChargesOrderId = id;
-      _deliveryChargesFetchedAt = DateTime.now();
-      _deliveryChargesFailureOrderId = null;
-      _deliveryChargesRetryAt = null;
-      activeDeliveryCharges.value = details;
-      _applyDriverDeliveryCharges(details);
+      _setActiveDeliveryCharges(id, details);
       currentOrder.refresh();
     } catch (e) {
       AppLogger.log('Delivery charges apply error for $id: $e', tag: 'API');
     } finally {
       _deliveryChargesInFlight.remove(id);
+    }
+  }
+
+  /// Stores the authoritative backend details for [orderId] and applies them
+  /// to the current order. Safe to call with the accept response, so the popup
+  /// is populated immediately without a second network request.
+  void _setActiveDeliveryCharges(
+    String orderId,
+    DriverDeliveryChargeModel details,
+  ) {
+    _deliveryChargesOrderId = orderId;
+    _deliveryChargesFetchedAt = DateTime.now();
+    _deliveryChargesFailureOrderId = null;
+    _deliveryChargesRetryAt = null;
+    activeDeliveryCharges.value = details;
+    if (currentOrder.value.id == orderId) {
+      _applyDriverDeliveryCharges(details);
+    }
+  }
+
+  /// Applies order details returned by the accept-order API. This is the fast
+  /// path that makes the popup appear right after tapping Accept.
+  void applyAcceptedOrderDetails(
+    String orderId,
+    DriverDeliveryChargeModel details,
+  ) {
+    final id = orderId.trim();
+    if (id.isEmpty) return;
+    if (currentOrder.value.id == id) {
+      _setActiveDeliveryCharges(id, details);
+      currentOrder.refresh();
     }
   }
 
@@ -824,29 +815,22 @@ class HomeController extends GetxController {
     final order = currentOrder.value;
     if (order.id == null || order.id!.isEmpty) return;
 
-    // Distances / charges shown in the popup.
+    // Distances / charges shown in the popup. These come from the backend
+    // only — the app no longer estimates routes or charges locally.
     driverToRestaurantDistance.value = details.pickupDistanceKm;
     restaurantToCustomerDistance.value = details.deliveryDistanceKm;
     driverToRestaurantCharge.value = details.pickupCharge;
     restaurantToCustomerCharge.value = details.deliveryCharge;
-    _restaurantToCustomerBillableKm = details.deliveryDistanceKm;
     totalCalculatedCharge.value = details.effectiveDriverCharge;
 
     order.pickUpDistanceInKms = details.pickupDistanceKm;
     order.deliveryDistanceInKms = details.deliveryDistanceKm;
     order.pickUpCharges = details.pickupCharge;
     order.deliverCharges = details.deliveryCharge;
-
-    // Mark the local charge calculator as done for this order so
-    // `_syncVendorAndChargesForCurrentOrder` keeps the backend values instead
-    // of replacing them with locally estimated ones.
-    _chargesComputedForOrderId = order.id!.toString();
-
-    if (details.tipAmount > 0) {
-      order.tipAmount = details.tipAmount.toString();
-    }
-    if (details.deliveryCharge > 0) {
-      order.deliveryCharge = details.deliveryCharge.toString();
+    order.tipAmount = details.tipAmount.toString();
+    order.deliveryCharge = details.deliveryCharge.toString();
+    if (details.orderTotalAmount > 0) {
+      order.toPay = details.orderTotalAmount.toString();
     }
 
     // Prefer the outlet details supplied by the charges API.
@@ -897,95 +881,132 @@ class HomeController extends GetxController {
     _deliveryChargesRetryAt = null;
   }
 
+  // ── Popup visibility ──────────────────────────────────────────────────
+  // The backend's active order + delivery charge details are authoritative.
+  // Do not depend on the Firestore request/in-progress lists here: they are
+  // frequently stale, which used to leave the driver without a popup.
+
+  /// Backend details only when they belong to the order currently displayed.
+  DriverDeliveryChargeModel? get currentDeliveryCharges {
+    final details = activeDeliveryCharges.value;
+    return details?.orderId == currentOrder.value.id ? details : null;
+  }
+
+  bool get _hasOrderPopupData {
+    final order = currentOrder.value;
+    final oid = order.id;
+    if (oid == null || oid.isEmpty) return false;
+
+    final details = activeDeliveryCharges.value;
+    final matches = details != null && details.orderId == oid;
+    final hasVendor = order.vendor != null ||
+        (order.vendorID?.isNotEmpty ?? false) ||
+        (matches &&
+            (details.hasOutletData || details.hasOutletCoordinates));
+    final hasCustomer = order.address != null ||
+        (matches &&
+            (details.hasCustomerData || details.hasCustomerCoordinates));
+    return hasVendor && hasCustomer;
+  }
+
+  bool get _isActiveOrderForDriver {
+    final order = currentOrder.value;
+    final oid = order.id;
+    if (oid == null || oid.isEmpty) return false;
+
+    final status = order.status;
+    final isActiveStatus = status == Constant.driverAccepted ||
+        status == Constant.orderShipped ||
+        status == Constant.orderInTransit;
+    if (!isActiveStatus) return false;
+
+    final driverId =
+        driverModel.value.id?.toString() ?? Constant.userModel?.id?.toString();
+    if (driverId != null && order.driverID == driverId) return true;
+    if (driverModel.value.inProgressOrderID?.contains(oid) ?? false) {
+      return true;
+    }
+    if (_serverActiveOrderId == oid) return true;
+
+    // If the backend explicitly assigned this order to a different driver,
+    // cached delivery details must not keep the popup alive.
+    final assignedDriverId = order.driverID;
+    if (assignedDriverId != null &&
+        assignedDriverId.isNotEmpty &&
+        driverId != null &&
+        assignedDriverId != driverId) {
+      return false;
+    }
+
+    final details = activeDeliveryCharges.value;
+    if (details != null && details.orderId == oid) return true;
+    return false;
+  }
+
+  /// Accept / reject popup for a new order request.
+  bool get showAcceptRejectPopup {
+    if (!_hasOrderPopupData || _isActiveOrderForDriver) return false;
+
+    final order = currentOrder.value;
+    final status = order.status;
+    final isPending = status == Constant.driverPending ||
+        status == Constant.orderAccepted ||
+        status == Constant.orderPlaced;
+    if (!isPending) return false;
+
+    final driverId =
+        driverModel.value.id?.toString() ?? Constant.userModel?.id?.toString();
+    final assignedToOther = order.driverID != null &&
+        order.driverID!.isNotEmpty &&
+        order.driverID != driverId;
+    return !assignedToOther;
+  }
+
+  /// Active-order card shown after the driver accepts an order.
+  bool get showActiveOrderPopup {
+    if (!_hasOrderPopupData || !_isActiveOrderForDriver) return false;
+
+    final status = currentOrder.value.status;
+    return status != Constant.orderCompleted &&
+        status != Constant.orderCancelled &&
+        status != Constant.orderRejected &&
+        status != Constant.driverRejected;
+  }
+
+  /// Applies the backend charges. The app never estimates distances or
+  /// delivery charges locally: if the backend copy is missing it is fetched,
+  /// otherwise the cached copy is reused.
   Future<void> calculateOrderChargesInitial(
       {bool fetchSurgeAndToPay = true}) async {
-    if (currentOrder.value.id == null || _isCalculatingCharges) return;
+    final id = currentOrder.value.id;
+    if (id == null || id.isEmpty) return;
 
-    // Backend charges are authoritative. Never replace them with a locally
-    // estimated route calculation.
     final backendDetails = activeDeliveryCharges.value;
-    if (backendDetails != null &&
-        _deliveryChargesOrderId == currentOrder.value.id?.toString()) {
+    if (backendDetails != null && _deliveryChargesOrderId == id) {
       _applyDriverDeliveryCharges(backendDetails);
+    } else {
+      await _loadDriverDeliveryCharges(id);
+    }
+
+    if (!fetchSurgeAndToPay) {
+      if (currentOrder.value.paymentMethod?.toLowerCase() == 'cod') {
+        final tip = double.tryParse(
+                currentOrder.value.tipAmount?.toString() ?? '0') ??
+            0.0;
+        toPayAmount.value =
+            totalCalculatedCharge.value + surgeFee.value + tip;
+      }
       return;
     }
 
-    _isCalculatingCharges = true;
-    var completedOk  = false;
-    var hadR2cInputs = false;
-    try {
-      AppLogger.log(
-        'Charges: start order=${currentOrder.value.id} '
-            'pickup=₹${_pickupRsPerKm}/km '
-            'delivery≤${_deliveryShortTripMaxKm}km=flat₹${_deliveryShortTripBaseCharge} '
-            'then≤${_deliveryFirstSlabKm}km=₹${_deliveryRsPerKmFirstSlab}/km '
-            'beyond=ceil×₹${_deliveryRsPerKmBeyond}',
-        tag: 'Charges',
-      );
+    // final fee = await _fetchSurgeFee(id);
+    // surgeFee.value = fee ?? 0.0;
 
-      if (currentOrder.value.vendor != null) {
-        await _calcDriverToRestaurant();
-      }
-
-      if (currentOrder.value.vendor != null &&
-          _customerDropLatLng(currentOrder.value.address) != null) {
-        await _calcRestaurantToCustomer();
-      }
-
-      _calcTotalCharge();
-
-      if (fetchSurgeAndToPay) {
-        final fee = await _fetchSurgeFee(currentOrder.value.id.toString());
-        surgeFee.value = fee ?? 0.0;
-
-        if (currentOrder.value.paymentMethod?.toLowerCase() == 'cod') {
-          final tp = await _fetchToPay(currentOrder.value.id.toString());
-          toPayAmount.value = tp ?? 0.0;
-        }
-      } else {
-        if (currentOrder.value.paymentMethod?.toLowerCase() == 'cod') {
-          final tip = double.tryParse(
-              currentOrder.value.tipAmount?.toString() ?? '0') ??
-              0.0;
-          toPayAmount.value =
-              totalCalculatedCharge.value + surgeFee.value + tip;
-        }
-      }
-
-      hadR2cInputs = currentOrder.value.vendor != null &&
-          _customerDropLatLng(currentOrder.value.address) != null;
-      completedOk = true;
-    } catch (e) {
-      AppLogger.log('Charge calc error: $e', tag: 'Charges');
-    } finally {
-      _isCalculatingCharges     = false;
-      _hasCalculatedBaseCharges = true;
-      if (completedOk && currentOrder.value.id != null && hadR2cInputs) {
-        _chargesComputedForOrderId = currentOrder.value.id!.toString();
-      }
-
-      if (_driverChargesNeedsRecalc &&
-          _driverChargesApplied &&
-          currentOrder.value.id != null &&
-          currentOrder.value.vendor != null) {
-        _driverChargesNeedsRecalc = false;
-        unawaited(() async {
-          try {
-            await calculateOrderChargesInitial(fetchSurgeAndToPay: false);
-            _updateOrderWithCharges();
-            currentOrder.refresh();
-          } catch (_) {}
-        }());
-      }
-    }
-
-    // A backend response may have arrived while the local estimate was
-    // running. Backend values always win, so restore them one final time.
-    final latestBackend = activeDeliveryCharges.value;
-    if (latestBackend != null &&
-        _deliveryChargesOrderId == currentOrder.value.id?.toString()) {
-      _applyDriverDeliveryCharges(latestBackend);
-    }
+    // if (currentOrder.value.paymentMethod?.toLowerCase() == 'cod') {
+    //   // final tp = await _fetchToPay(id);
+    //   toPayAmount.value =
+    //       tp ?? (totalCalculatedCharge.value + surgeFee.value);
+    // }
   }
 
   Future<void> calculateOrderCharges() async {
@@ -993,26 +1014,26 @@ class HomeController extends GetxController {
     _updateOrderWithCharges();
   }
 
+  /// Location updates only matter while the backend charges are not loaded.
+  /// Once they are cached, no local recalculation is performed.
   void notifyDriverLocationUpdated() {
-    if (currentOrder.value.id == null || currentOrder.value.vendor == null) {
+    final id = currentOrder.value.id;
+    if (id == null || id.isEmpty) return;
+    if (activeDeliveryCharges.value != null &&
+        _deliveryChargesOrderId == id) {
       return;
     }
+
     _chargesRecalcDebounce?.cancel();
     _chargesRecalcDebounce =
         Timer(const Duration(milliseconds: 700), () async {
-          if (currentOrder.value.id == null) return;
-          if (driverToRestaurantDistance.value >= 0.0005) return;
-          AppLogger.log(
-            'Charges: recalc after GPS '
-                '(pickup km was ${driverToRestaurantDistance.value})',
-            tag: 'Charges',
-          );
-          try {
-            await calculateOrderCharges();
-          } catch (e) {
-            AppLogger.log('Charges: recalc error: $e', tag: 'Charges');
-          }
-        });
+      if (currentOrder.value.id == null) return;
+      try {
+        await calculateOrderChargesInitial(fetchSurgeAndToPay: false);
+      } catch (e) {
+        AppLogger.log('Charges: refresh error: $e', tag: 'Charges');
+      }
+    });
   }
 
   bool _isUsableDriverCoord(double? lat, double? lng) {
@@ -1032,23 +1053,12 @@ class HomeController extends GetxController {
     return (lat: lat, lng: lng);
   }
 
-  ({double lat, double lng})? _vendorLatLng(VendorModel v) {
-    final lat = v.latitudeValue  ?? v.latitude  ??
-        v.coordinates?.latitude  ?? v.g?.geopoint?.latitude;
-    final lng = v.longitudeValue ?? v.longitude ??
-        v.coordinates?.longitude ?? v.g?.geopoint?.longitude;
-    if (lat == null || lng == null) return null;
-    return (lat: lat, lng: lng);
-  }
-
   // ── _syncVendorAndChargesForCurrentOrder ──────────────────────────────
 
   Future<void> _syncVendorAndChargesForCurrentOrder() async {
     final oid = currentOrder.value.id?.toString();
     if (oid == null || oid.isEmpty) return;
 
-    // If the backend returned charges for this order, keep them. Refresh in
-    // the background when the cached copy is older than the TTL.
     final backendDetails = activeDeliveryCharges.value;
     if (backendDetails != null && _deliveryChargesOrderId == oid) {
       _applyDriverDeliveryCharges(backendDetails);
@@ -1060,63 +1070,11 @@ class HomeController extends GetxController {
       return;
     }
 
-    // No backend copy yet — start loading it in the background. The local
-    // calculation below remains a temporary fallback for the popup.
-    unawaited(_loadDriverDeliveryCharges(oid));
+    await _loadDriverDeliveryCharges(oid);
 
     if (currentOrder.value.vendor == null &&
         (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
       await _fetchVendorData(currentOrder.value.vendorID!);
-    }
-
-    final v    = currentOrder.value.vendor;
-    final cust = _customerDropLatLng(currentOrder.value.address);
-    final vp   = v != null ? _vendorLatLng(v) : null;
-    final hasR2cInputs = vp != null && cust != null;
-
-    if (!hasR2cInputs) return;
-
-    // Straight-line distance (fast, no network)
-    final straightLegKm = Geolocator.distanceBetween(
-        vp.lat, vp.lng, cust.lat, cust.lng) /
-        1000;
-
-    // Sanity-check the stored route distance against straight-line
-    final storedRouteKm    = restaurantToCustomerDistance.value;
-    final routeLooksSuspect = storedRouteKm > 0 &&
-        straightLegKm > 0.1 &&
-        storedRouteKm / straightLegKm > 2.0; // tightened from 3.0
-
-    if (routeLooksSuspect) {
-      AppLogger.log(
-        'R→C SANITY: stored routeKm=${storedRouteKm.toStringAsFixed(3)} '
-            'vs straightKm=${straightLegKm.toStringAsFixed(3)} '
-            '(ratio=${(storedRouteKm / straightLegKm).toStringAsFixed(2)}) '
-            '— busting leg caches',
-        tag: 'Charges',
-      );
-      _chargesComputedForOrderId = null;
-      _clearLegCaches();
-    }
-
-    // Hot-path: already computed correctly
-    if (_chargesComputedForOrderId == oid &&
-        restaurantToCustomerCharge.value > 0 &&
-        !routeLooksSuspect) {
-      return;
-    }
-
-    final r2cMissing = straightLegKm > 0.0005 &&
-        restaurantToCustomerCharge.value <= 0;
-
-    final needCharges = _chargesComputedForOrderId != oid ||
-        r2cMissing ||
-        routeLooksSuspect;
-
-    if (needCharges) {
-      await calculateOrderChargesInitial();
-      _updateOrderWithCharges();
-      currentOrder.refresh();
     }
   }
 
@@ -1211,400 +1169,6 @@ class HomeController extends GetxController {
     return (lat: lat!, lng: lng!, source: source);
   }
 
-  Future<void> _calcDriverToRestaurant() async {
-    final v  = currentOrder.value.vendor!;
-    final vp = _vendorLatLng(v);
-    if (vp == null) {
-      driverToRestaurantDistance.value = 0.0;
-      driverToRestaurantDuration.value = 0.0;
-      driverToRestaurantCharge.value   = 0.0;
-      AppLogger.log(
-          'Driver->Restaurant: vendor has no coordinates vendorId=${v.id}',
-          tag: 'Charges');
-      return;
-    }
-
-    final driver = await _resolveDriverLatLngForCharges();
-    if (driver == null) {
-      driverToRestaurantDistance.value = 0.0;
-      driverToRestaurantDuration.value = 0.0;
-      driverToRestaurantCharge.value   = 0.0;
-      AppLogger.log(
-          'Driver->Restaurant: no driver GPS; restaurant at '
-              '${vp.lat},${vp.lng}',
-          tag: 'Charges');
-      return;
-    }
-
-    final origin = LatLng(driver.lat, driver.lng);
-    final dest = LatLng(vp.lat, vp.lng);
-    var routeKm = await _resolveLegDistanceKm(
-      origin:      origin,
-      destination: dest,
-      legTag:      'Driver->Restaurant',
-    );
-    if (routeKm <= 0.0005) {
-      routeKm = _straightLineKm(origin, dest);
-    }
-    driverToRestaurantDistance.value = routeKm;
-    driverToRestaurantDuration.value = (routeKm / 30) * 60;
-    driverToRestaurantCharge.value   = _pickupChargeFromKm(routeKm);
-    AppLogger.log(
-      'Driver->Restaurant: km=${routeKm.toStringAsFixed(3)} '
-          'charge=${driverToRestaurantCharge.value} (×$_pickupRsPerKm/km) '
-          'driver(${driver.lat},${driver.lng}) src=${driver.source} '
-          'restaurant(${vp.lat},${vp.lng})',
-      tag: 'Charges',
-    );
-  }
-
-  Future<void> _calcRestaurantToCustomer() async {
-    final cust = _customerDropLatLng(currentOrder.value.address);
-    final vp   = _vendorLatLng(currentOrder.value.vendor!);
-
-    AppLogger.log(
-      'R→C COORDS: vendor=(${vp?.lat},${vp?.lng}) '
-          'customer=(${cust?.lat},${cust?.lng}) '
-          'address="${currentOrder.value.address?.getFullAddress()}"',
-      tag: 'Charges',
-    );
-
-    if (vp == null || cust == null) {
-      restaurantToCustomerDistance.value = 0.0;
-      restaurantToCustomerDuration.value = 0.0;
-      restaurantToCustomerCharge.value   = 0.0;
-      _restaurantToCustomerBillableKm    = 0;
-      return;
-    }
-
-    final origin = LatLng(vp.lat, vp.lng);
-    final dest = LatLng(cust.lat, cust.lng);
-    var routeKm = await _resolveLegDistanceKm(
-      origin:      origin,
-      destination: dest,
-      legTag:      'Restaurant->Customer',
-    );
-    if (routeKm <= 0.0005) {
-      routeKm = _straightLineKm(origin, dest);
-    }
-
-    restaurantToCustomerDistance.value = routeKm;
-    restaurantToCustomerDuration.value = (routeKm / 30) * 60;
-
-    final billableKm = _billableRestaurantToCustomerKm(routeKm);
-    _restaurantToCustomerBillableKm  = billableKm;
-    restaurantToCustomerCharge.value =
-        _restaurantToCustomerChargeFromBillableKm(billableKm);
-
-    if (_deliveryShortTripMaxKm > 0 && billableKm <= _deliveryShortTripMaxKm) {
-      AppLogger.log(
-        'R→C: routeKm=${routeKm.toStringAsFixed(3)} '
-            'billableKm=${billableKm.toStringAsFixed(1)} '
-            '≤${_deliveryShortTripMaxKm}km flat '
-            '₹${_deliveryShortTripBaseCharge} '
-            '= ${restaurantToCustomerCharge.value}',
-        tag: 'Charges',
-      );
-    } else if (billableKm <= _deliveryFirstSlabKm) {
-      AppLogger.log(
-        'R→C: routeKm=${routeKm.toStringAsFixed(3)} '
-            'billableKm=${billableKm.toStringAsFixed(1)} '
-            'proRata ${billableKm.toStringAsFixed(1)}'
-            '×$_deliveryRsPerKmFirstSlab '
-            '= ${restaurantToCustomerCharge.value}',
-        tag: 'Charges',
-      );
-    } else {
-      final beyondKm = billableKm - _deliveryFirstSlabKm;
-      AppLogger.log(
-        'R→C: routeKm=${routeKm.toStringAsFixed(3)} '
-            'billableKm=${billableKm.toStringAsFixed(1)} '
-            '${_deliveryFirstSlabKm.toInt()}×$_deliveryRsPerKmFirstSlab '
-            '+ ${beyondKm.ceil()}×$_deliveryRsPerKmBeyond '
-            '= ${restaurantToCustomerCharge.value}',
-        tag: 'Charges',
-      );
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  _resolveLegDistanceKm
-  //
-  //  Changes vs previous version:
-  //  • Fires TWO parallel Directions requests:
-  //      [alt]   — alternatives=true,  no avoid  (original behaviour)
-  //      [local] — alternatives=false, avoid=highways (local-roads route)
-  //    Both are awaited concurrently via Future.wait, so total latency is
-  //    only as long as the slower of the two requests (not additive).
-  //  • Sanity cap tightened to 1.8× (city grid roads rarely exceed 1.8×
-  //    crow-fly; the old 3.0× let a 2× highway detour slip through).
-  //  • Any candidate that exceeds the cap is logged and discarded.
-  //  • The shortest surviving candidate is promoted to the primary cache.
-  //  • If ALL candidates fail the cap, straight-line goes to the fallback
-  //    cache (30-s TTL) so the API is retried automatically next call.
-  //  • Extracted _fetchDirectionsKm() to keep this method readable.
-  // ══════════════════════════════════════════════════════════════════════
-
-  Future<double> _resolveLegDistanceKm({
-    required LatLng origin,
-    required LatLng destination,
-    required String legTag,
-  }) async {
-    final straightKm = _straightLineKm(origin, destination);
-
-    final originBad = (origin.latitude == 0 && origin.longitude == 0) ||
-        origin.latitude.abs() > 90 ||
-        origin.longitude.abs() > 180;
-    final destBad = (destination.latitude == 0 && destination.longitude == 0) ||
-        destination.latitude.abs() > 90 ||
-        destination.longitude.abs() > 180;
-
-    if (originBad || destBad) {
-      AppLogger.log(
-        '$legTag BAD COORDS → straight ${straightKm.toStringAsFixed(3)} km',
-        tag: 'LegCache',
-      );
-      return straightKm;
-    }
-
-    final cacheKey =
-        '${_snap4(origin.latitude)},${_snap4(origin.longitude)}'
-        '->${_snap4(destination.latitude)},${_snap4(destination.longitude)}';
-
-    if (_legDistanceCache.containsKey(cacheKey)) {
-      final cached = _legDistanceCache[cacheKey]!;
-      if (cached > 0.0005 || straightKm <= 0.0005) {
-        AppLogger.log(
-          '$legTag API-cache HIT ${cached.toStringAsFixed(3)} km',
-          tag: 'LegCache',
-        );
-        return cached;
-      }
-      _legDistanceCache.remove(cacheKey);
-      AppLogger.log(
-        '$legTag API-cache busted invalid 0 km (straight='
-            '${straightKm.toStringAsFixed(3)} km)',
-        tag: 'LegCache',
-      );
-    }
-
-    final fallback = _legFallbackCache[cacheKey];
-    if (fallback != null && !fallback.isStale) {
-      if (fallback.km > 0.0005 || straightKm <= 0.0005) {
-        AppLogger.log(
-          '$legTag fallback-cache HIT ${fallback.km.toStringAsFixed(3)} km',
-          tag: 'LegCache',
-        );
-        return fallback.km;
-      }
-      _legFallbackCache.remove(cacheKey);
-    }
-
-    AppLogger.log(
-      '$legTag cache MISS — straight=${straightKm.toStringAsFixed(3)} km',
-      tag: 'LegCache',
-    );
-
-    if (Constant.selectedMapType != 'google' || Constant.mapAPIKey.isEmpty) {
-      AppLogger.log(
-        '$legTag no Google API → straight ${straightKm.toStringAsFixed(3)} km',
-        tag: 'LegCache',
-      );
-      _legFallbackCache[cacheKey] = _LegFallback(straightKm);
-      return straightKm;
-    }
-
-    const sanityCap = 1.8;
-    try {
-      final routeKm = await _fetchDirectionsKm(
-        origin: origin,
-        destination: destination,
-        legTag: legTag,
-      );
-
-      if (routeKm != null &&
-          routeKm > 0.0005 &&
-          (straightKm <= 0.1 || routeKm / straightKm <= sanityCap)) {
-        _legDistanceCache[cacheKey] = routeKm;
-        AppLogger.log(
-          '$legTag FINAL GOOGLE = ${routeKm.toStringAsFixed(3)} km '
-              '(straight=${straightKm.toStringAsFixed(3)} km)',
-          tag: 'LegCache',
-        );
-        return routeKm;
-      }
-
-      if (routeKm != null && routeKm > 0) {
-        AppLogger.log(
-          '$legTag SANITY FAIL ${routeKm.toStringAsFixed(3)} km '
-              '> ${sanityCap}× straight — using straight line',
-          tag: 'LegCache',
-        );
-      } else {
-        AppLogger.log(
-          '$legTag Google failed — straight ${straightKm.toStringAsFixed(3)} km',
-          tag: 'LegCache',
-        );
-      }
-
-      _legFallbackCache[cacheKey] = _LegFallback(straightKm);
-      return straightKm;
-    } catch (e) {
-      AppLogger.log(
-        '$legTag error → straight ${straightKm.toStringAsFixed(3)} km: $e',
-        tag: 'LegCache',
-      );
-      _legFallbackCache[cacheKey] = _LegFallback(straightKm);
-      return straightKm;
-    }
-  }
-
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  _fetchDirectionsKm
-  //
-  //  Calls Google Directions once and returns the shortest route distance
-  //  in km across all returned routes, or null on any failure.
-  //  Extracted from _resolveLegDistanceKm to keep that method readable
-  //  and to allow parallel invocation via Future.wait.
-  // ══════════════════════════════════════════════════════════════════════
-
-  Future<double?> _fetchDirectionsKm({
-    required LatLng origin,
-    required LatLng destination,
-    required String legTag,
-  }) async {
-
-    try {
-
-      final params = <String, String>{
-
-        'origin':
-        '${origin.latitude},${origin.longitude}',
-
-        'destination':
-        '${destination.latitude},${destination.longitude}',
-
-        'mode': 'driving',
-
-        // IMPORTANT
-        'alternatives': 'true',
-
-        // VERY IMPORTANT
-        'departure_time': 'now',
-
-        // OPTIONAL BUT GOOD
-        'traffic_model': 'best_guess',
-
-        'key': Constant.mapAPIKey,
-      };
-
-      // FIX
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/directions/json',
-        params,
-      );
-
-      AppLogger.log(
-        '$legTag URL = $uri',
-        tag: 'LegCache',
-      );
-
-      final response = await http.get(uri);
-
-      if (response.statusCode != 200) {
-        return null;
-      }
-
-      final data = jsonDecode(response.body);
-
-      if (data['status'] != 'OK') {
-
-        AppLogger.log(
-          '$legTag API ERROR ${data['status']}',
-          tag: 'LegCache',
-        );
-
-        return null;
-      }
-
-      final routes = data['routes'] as List<dynamic>?;
-
-      if (routes == null || routes.isEmpty) {
-        return null;
-      }
-
-      double bestDuration = double.infinity;
-      double selectedMeters = 0;
-
-      for (final route in routes) {
-
-        final legs = route['legs'] as List<dynamic>?;
-
-        if (legs == null || legs.isEmpty) {
-          continue;
-        }
-
-        double routeMeters = 0;
-        double durationSeconds = 0;
-
-        for (final leg in legs) {
-
-          routeMeters +=
-              (leg['distance']?['value'] as num?)?.toDouble() ?? 0;
-
-          durationSeconds +=
-              (leg['duration']?['value'] as num?)?.toDouble() ?? 0;
-        }
-
-        AppLogger.log(
-          '$legTag ROUTE ${(routeMeters / 1000).toStringAsFixed(3)} km '
-              'duration ${(durationSeconds / 60).toStringAsFixed(1)} min',
-          tag: 'LegCache',
-        );
-
-        // PICK FASTEST ROUTE
-        if (durationSeconds < bestDuration) {
-
-          bestDuration = durationSeconds;
-          selectedMeters = routeMeters;
-        }
-      }
-
-      if (selectedMeters <= 0) {
-        return null;
-      }
-
-      final km = selectedMeters / 1000;
-
-      AppLogger.log(
-        '$legTag FINAL DISTANCE ${km.toStringAsFixed(3)} km',
-        tag: 'LegCache',
-      );
-
-      return km;
-
-    } catch (e) {
-
-      AppLogger.log(
-        '$legTag FETCH ERROR $e',
-        tag: 'LegCache',
-      );
-
-      return null;
-    }
-  }
-
-
-  /// Snap to 4 decimal places (~11 m) for leg-cache key.
-  double _snap4(double v) => (v * 10000).round() / 10000;
-
-  void _calcTotalCharge() {
-    totalCalculatedCharge.value =
-        driverToRestaurantCharge.value + restaurantToCustomerCharge.value;
-  }
-
   void _updateOrderWithCharges() {
     final surge = surgeFee.value;
     final tip   =
@@ -1621,7 +1185,6 @@ class HomeController extends GetxController {
       'driverToRestaurantDuration'     : driverToRestaurantDuration.value,
       'driverToRestaurantCharge'       : driverToRestaurantCharge.value,
       'restaurantToCustomerDistance'   : restaurantToCustomerDistance.value,
-      'restaurantToCustomerBillableKm' : _restaurantToCustomerBillableKm,
       'restaurantToCustomerDuration'   : restaurantToCustomerDuration.value,
       'restaurantToCustomerCharge'     : restaurantToCustomerCharge.value,
       'tipsAmount'                     : currentOrder.value.tipAmount,
@@ -1631,45 +1194,45 @@ class HomeController extends GetxController {
     };
   }
 
-  Future<double?> _fetchSurgeFee(String orderId) async {
-    try {
-      final res = await AuthHttpClient().get(
-        Uri.parse(
-          '${Constant.baseUrl}mobile/orders/$orderId/billing/surge-fee',
-        ),
-        timeout: const Duration(seconds: 6),
-      );
-      if (res.statusCode == 200) {
-        final j = jsonDecode(res.body);
-        if (j['success'] == true) {
-          final v = j['data']?['total_surge_fee'];
-          if (v != null) return (v as num).toDouble();
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
+  // Future<double?> _fetchSurgeFee(String orderId) async {
+  //   try {
+  //     final res = await AuthHttpClient().get(
+  //       Uri.parse(
+  //         '${Constant.baseUrl}mobile/orders/$orderId/billing/surge-fee',
+  //       ),
+  //       timeout: const Duration(seconds: 6),
+  //     );
+  //     if (res.statusCode == 200) {
+  //       final j = jsonDecode(res.body);
+  //       if (j['success'] == true) {
+  //         final v = j['data']?['total_surge_fee'];
+  //         if (v != null) return (v as num).toDouble();
+  //       }
+  //     }
+  //   } catch (_) {}
+  //   return null;
+  // }
 
-  Future<double?> _fetchToPay(String orderId) async {
-    try {
-      final res = await AuthHttpClient().get(
-        Uri.parse(
-          '${Constant.baseUrl}mobile/orders/$orderId/billing/to-pay',
-        ),
-        timeout: const Duration(seconds: 6),
-      );
-      if (res.statusCode == 200) {
-        final j = jsonDecode(res.body);
-        if (j['success'] == true && j['data']?['found'] == true) {
-          return (j['data']['to_pay'] as num).toDouble();
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
+  // Future<double?> _fetchToPay(String orderId) async {
+  //   try {
+  //     final res = await AuthHttpClient().get(
+  //       Uri.parse(
+  //         '${Constant.baseUrl}mobile/orders/$orderId/billing/to-pay',
+  //       ),
+  //       timeout: const Duration(seconds: 6),
+  //     );
+  //     if (res.statusCode == 200) {
+  //       final j = jsonDecode(res.body);
+  //       if (j['success'] == true && j['data']?['found'] == true) {
+  //         return (j['data']['to_pay'] as num).toDouble();
+  //       }
+  //     }
+  //   } catch (_) {}
+  //   return null;
+  // }
 
-  Future<double?> fetchOrderSurgeFeePublic(String orderId) =>
-      _fetchSurgeFee(orderId);
+  // Future<double?> fetchOrderSurgeFeePublic(String orderId) =>
+  //     _fetchSurgeFee(orderId);
 
   // ══════════════════════════════════════════════════════════════════════
   //  changeData
@@ -1895,82 +1458,225 @@ class HomeController extends GetxController {
   // ══════════════════════════════════════════════════════════════════════
 
   Future<void> acceptOrder() async {
-    if (_isAcceptingOrder) return;
+    if (_isAcceptingOrder) {
+      AppLogger.log(
+        'Accept API skipped: already processing another accept request',
+        tag: 'OrderWorkflow',
+      );
+      return;
+    }
+
+    // Cooldown: prevents the "same snackbar again and again" loop when the
+    // same precondition keeps failing while the active-order poller keeps
+    // re-surfacing the same order.
+    if (_lastAcceptFailAt != null &&
+        DateTime.now().difference(_lastAcceptFailAt!) < _acceptFailCooldown) {
+      AppLogger.log(
+        'Accept suppressed (cooldown ${_acceptFailCooldown.inSeconds}s)',
+        tag: 'OrderWorkflow',
+      );
+      return;
+    }
+
+    final orderId = currentOrder.value.id?.toString().trim() ?? '';
+    final driverId = driverModel.value.id?.toString().trim() ?? '';
+
+    AppLogger.log(
+      'Accept button triggered | orderId=$orderId | driverId=$driverId '
+          '| status=${currentOrder.value.status}',
+      tag: 'OrderWorkflow',
+    );
+
+    if (orderId.isEmpty || driverId.isEmpty) {
+      AppLogger.log(
+        'Accept API skipped: missing orderId or driverId',
+        tag: 'OrderWorkflow',
+      );
+      ShowToastDialog.showToast('Order or driver ID missing');
+      return;
+    }
+
     if (currentOrder.value.status == Constant.driverAccepted &&
-        currentOrder.value.driverID == driverModel.value.id) return;
+        currentOrder.value.driverID?.toString() == driverId) {
+      AppLogger.log(
+        'Accept API skipped: order already accepted by this driver',
+        tag: 'OrderWorkflow',
+      );
+      return;
+    }
+
+    // Fail fast if the driver has no usable location. This is exactly why
+    // the backend was returning "Driver latitude or longitude unavailable".
+    if (!await _ensureDriverLocation()) {
+      _lastAcceptFailAt = DateTime.now();
+      AppLogger.log(
+        'Accept blocked: driver location unavailable',
+        tag: 'OrderWorkflow',
+      );
+      ShowToastDialog.showToast(
+        'Enable GPS / location to accept orders',
+      );
+      return;
+    }
 
     _changeDataDebounce?.cancel();
     _isAcceptingOrder = true;
-    await AudioPlayerService.playSound(false);
-    ShowToastDialog.showLoader('Please wait'.tr);
 
     try {
-      if ((currentOrder.value.id ?? '').isEmpty ||
-          (driverModel.value.id ?? '').isEmpty) {
-        ShowToastDialog.closeLoader();
-        ShowToastDialog.showToast('Order or driver ID missing');
-        return;
-      }
+      await AudioPlayerService.playSound(false);
+      ShowToastDialog.showLoader('Please wait'.tr);
+
+      AppLogger.log(
+        'Calling acceptOrderBackend | orderId=$orderId | driverId=$driverId',
+        tag: 'OrderWorkflow',
+      );
 
       final result = await OrderWorkflowService.acceptOrderBackend(
-        order:       currentOrder.value,
+        order: currentOrder.value,
         driverModel: driverModel.value,
       );
 
-      if (result == null) {
-        ShowToastDialog.closeLoader();
-        Get.snackbar('Rate Limited', 'Please wait and try again.',
-            snackPosition: SnackPosition.BOTTOM);
+      AppLogger.log(
+        'acceptOrderBackend response | success=${result.success} '
+            '| code=${result.errorCode}',
+        tag: 'OrderWorkflow',
+      );
+
+      // Rate limited.
+      if (result.success == null) {
+        _lastAcceptFailAt = DateTime.now();
+        Get.snackbar(
+          'Rate Limited',
+          result.errorMessage ?? 'Please wait and try again.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
         return;
       }
 
-      if (result == true) {
-        final orderId = currentOrder.value.id!;
+      if (result.success == true) {
+        _lastAcceptFailAt = null;
+
         _markOrderHandledAndMute(orderId);
         _notifiedOrderIds.remove(orderId);
+
         _lastKnownStatus      = Constant.driverAccepted;
         _lastStatusChangeTime = DateTime.now();
 
-        await calculateOrderCharges();
-        await FireStoreUtils.setOrder(currentOrder.value);
-        await _forceRefreshOrder(orderId);
+        // Update local state immediately.
+        currentOrder.value.status   = Constant.driverAccepted;
+        currentOrder.value.driverID = driverId;
+        currentOrder.value.driver   = driverModel.value;
 
-        ShowToastDialog.closeLoader();
+        if (result.details != null) {
+          applyAcceptedOrderDetails(orderId, result.details!);
+        }
 
-        if (currentOrder.value.author?.fcmToken != null) {
-          await SendNotification.sendFcmMessage(
-              Constant.driverAcceptedNotification,
-              currentOrder.value.author!.fcmToken.toString(),
-              {});
-        }
-        if (currentOrder.value.vendor?.fcmToken != null) {
-          await SendNotification.sendFcmMessage(
-              Constant.driverAcceptedNotification,
-              currentOrder.value.vendor!.fcmToken.toString(),
-              {});
-        }
+        _notifyOrderUiChanged();
 
         ShowToastDialog.showToast('Order accepted!'.tr);
-        _notifyOrderUiChanged();
-      } else {
-        ShowToastDialog.closeLoader();
-        Get.snackbar('Unavailable', 'Order accepted by another driver.',
-            snackPosition: SnackPosition.BOTTOM);
-        await AudioPlayerService.playSound(false);
-        _notifiedOrderIds.remove(currentOrder.value.id);
+
+        AppLogger.log(
+          'Order accepted successfully: $orderId',
+          tag: 'OrderWorkflow',
+        );
+
+        // Follow-up operations should not undo a successful API acceptance.
+        try {
+          await calculateOrderCharges();
+          await FireStoreUtils.setOrder(currentOrder.value);
+
+          if (currentOrder.value.author?.fcmToken != null) {
+            await SendNotification.sendFcmMessage(
+              Constant.driverAcceptedNotification,
+              currentOrder.value.author!.fcmToken.toString(),
+              {},
+            );
+          }
+
+          if (currentOrder.value.vendor?.fcmToken != null) {
+            await SendNotification.sendFcmMessage(
+              Constant.driverAcceptedNotification,
+              currentOrder.value.vendor!.fcmToken.toString(),
+              {},
+            );
+          }
+        } catch (e) {
+          AppLogger.log(
+            'Post-accept operation failed: $e',
+            tag: 'OrderWorkflow',
+          );
+        }
+        return;
+      }
+
+      // ---- success == false ----
+      _lastAcceptFailAt = DateTime.now();
+
+      final code    = result.errorCode;
+      final message = result.errorMessage;
+
+      AppLogger.log(
+        'Order acceptance rejected by backend: $orderId | '
+            'code=$code | message=$message',
+        tag: 'OrderWorkflow',
+      );
+
+      // Only this case means another driver genuinely took the order.
+      if (code == 'ALREADY_ACCEPTED') {
+        _notifiedOrderIds.remove(orderId);
+
         currentOrder.value = OrderModel();
-        _chargesComputedForOrderId = null;
         _clearDriverDeliveryCharges();
-        _clearLegCaches();
+
         await clearMap();
         update();
+
+        Get.snackbar(
+          'Unavailable',
+          message ?? 'Order accepted by another driver.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
       }
-    } catch (e) {
-      ShowToastDialog.closeLoader();
-      Get.snackbar('Error', 'Failed to accept order. Try again.',
-          snackPosition: SnackPosition.BOTTOM);
-      AppLogger.log('acceptOrder error: $e', tag: 'Error');
+
+      // Validation failures — keep the order on screen so the driver can
+      // fix the precondition and retry deliberately.
+      if (code == 'NO_LOCATION' || code == 'MISSING_IDS') {
+        _notifiedOrderIds.remove(orderId);
+        _notifyOrderUiChanged();
+
+        Get.snackbar(
+          code == 'NO_LOCATION' ? 'Location Required' : 'Missing Info',
+          message ?? 'Please fix the issue and retry.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+
+      // Any other backend failure — keep the order, show the real reason.
+      _notifiedOrderIds.remove(orderId);
+      _notifyOrderUiChanged();
+
+      Get.snackbar(
+        'Could not accept',
+        message ?? 'Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e, stackTrace) {
+      _lastAcceptFailAt = DateTime.now();
+
+      AppLogger.log(
+        'acceptOrder exception: $e\n$stackTrace',
+        tag: 'OrderWorkflow',
+      );
+
+      Get.snackbar(
+        'Error',
+        'Failed to accept order. Try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } finally {
+      ShowToastDialog.closeLoader();
       await AudioPlayerService.playSound(false);
       _isAcceptingOrder = false;
     }
@@ -1991,9 +1697,7 @@ class HomeController extends GetxController {
       );
 
       currentOrder.value = OrderModel();
-      _chargesComputedForOrderId = null;
       _clearDriverDeliveryCharges();
-      _clearLegCaches();
       await clearMap();
       _notifyOrderUiChanged(refreshOrder: false);
 
@@ -2140,9 +1844,13 @@ class HomeController extends GetxController {
 
     final currentIsServerActive = serverActiveOrderId != null &&
         currentOrder.value.id == serverActiveOrderId;
+    // Keep an order that the backend already knows is active even when the
+    // cached driver-profile lists have not caught up yet.
+    final keepBackendActive = _isActiveOrderForDriver;
 
     if (currentOrder.value.id != null &&
         !currentIsServerActive &&
+        !keepBackendActive &&
         !inProgress.contains(currentOrder.value.id) &&
         !requests.contains(currentOrder.value.id)) {
       if (_isAcceptingOrder) return;
@@ -2151,9 +1859,7 @@ class HomeController extends GetxController {
               (currentOrder.value.driverID?.isEmpty ?? true);
       if (!isPendingNoDriver) {
         currentOrder.value = OrderModel();
-        _chargesComputedForOrderId = null;
         _clearDriverDeliveryCharges();
-        _clearLegCaches();
         await clearMap();
         await AudioPlayerService.playSound(false);
         return;
@@ -2187,7 +1893,6 @@ class HomeController extends GetxController {
     }
 
     // New order — clear leg caches so there is no cross-order contamination
-    _clearLegCaches();
     await _fetchAndDisplayOrder(firstId,
         inProgress: inProgress, requests: requests);
   }
@@ -2240,9 +1945,11 @@ class HomeController extends GetxController {
         required List inProgress,
         required List requests,
       }) async {
-    // Primary endpoint: the CO service's complete order details. Returns the
-    // DTO directly and includes customer, outlet, items and price breakup.
-    OrderModel? fetched = await OrderDetailService.fetchOrder(orderId);
+    // Primary endpoint: the CO service's complete order details. The same
+    // response also carries the charges, so reuse it for the popup instead of
+    // making a second network request.
+    final bundle = await OrderDetailService.fetchOrderBundle(orderId);
+    OrderModel? fetched = bundle.order;
 
     // Legacy driver endpoint (kept only as a fallback for older backends).
     if (fetched == null) {
@@ -2275,9 +1982,7 @@ class HomeController extends GetxController {
       await FireStoreUtils.updateUser(driverModel.value);
       if (currentOrder.value.id == orderId) {
         currentOrder.value = OrderModel();
-        _chargesComputedForOrderId = null;
         _clearDriverDeliveryCharges();
-        _clearLegCaches();
         await clearMap();
         await AudioPlayerService.playSound(false);
       }
@@ -2292,9 +1997,7 @@ class HomeController extends GetxController {
       await FireStoreUtils.updateUser(driverModel.value);
       if (currentOrder.value.id == fetched.id) {
         currentOrder.value = OrderModel();
-        _chargesComputedForOrderId = null;
         _clearDriverDeliveryCharges();
-        _clearLegCaches();
         await clearMap();
       }
       resetStatusTracking();
@@ -2303,12 +2006,12 @@ class HomeController extends GetxController {
     }
 
     currentOrder.value = fetched;
-    _chargesComputedForOrderId = null;
     if (_deliveryChargesOrderId != fetched.id) {
       _clearDriverDeliveryCharges();
     }
-    _clearLegCaches(); // fresh order → clear any leftover cached distances
-    _lastFetchedOrderId   = fetched.id;
+    if (bundle.details != null) {
+      _setActiveDeliveryCharges(fetched.id!, bundle.details!);
+    }
     _lastKnownStatus      = fetched.status;
     _lastStatusChangeTime = DateTime.now();
 
@@ -2316,16 +2019,10 @@ class HomeController extends GetxController {
         (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
       await _fetchVendorData(currentOrder.value.vendorID!);
     }
-    if (currentOrder.value.vendor != null) {
-      await calculateOrderChargesInitial();
-    }
+    await calculateOrderChargesInitial();
 
     changeData();
     _notifyOrderUiChanged();
-
-    // Popup is already visible — enrich it with the backend's outlet,
-    // customer, distance and charge details without blocking the UI.
-    unawaited(_loadDriverDeliveryCharges(fetched.id!, forceRefresh: true));
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -2337,8 +2034,9 @@ class HomeController extends GetxController {
     try {
       final orderId = currentOrder.value.id!;
 
-      // Primary endpoint: CO complete order details.
-      OrderModel? refreshed = await OrderDetailService.fetchOrder(orderId);
+      // Primary endpoint: CO complete order details + charges in one call.
+      final bundle = await OrderDetailService.fetchOrderBundle(orderId);
+      OrderModel? refreshed = bundle.order;
 
       // Legacy driver endpoint (kept only as a fallback for older backends).
       refreshed ??= await _fetchLegacyDriverCurrentOrder(
@@ -2381,9 +2079,7 @@ class HomeController extends GetxController {
         driverModel.value.orderRequestData?.remove(currentOrder.value.id);
         await FireStoreUtils.updateUser(driverModel.value);
         currentOrder.value = OrderModel();
-        _chargesComputedForOrderId = null;
         _clearDriverDeliveryCharges();
-        _clearLegCaches();
         await clearMap();
         resetStatusTracking();
         _notifyOrderUiChanged(refreshOrder: false);
@@ -2394,10 +2090,6 @@ class HomeController extends GetxController {
         final changed =
             _lastKnownStatus != null && _lastKnownStatus != refreshed.status;
         currentOrder.value = refreshed;
-        if (forceRefresh) {
-          _chargesComputedForOrderId = null;
-          _clearLegCaches();
-        }
         if (changed) {
           _lastStatusChangeTime = DateTime.now();
           _lastKnownStatus      = refreshed.status;
@@ -2405,6 +2097,10 @@ class HomeController extends GetxController {
         } else {
           _lastKnownStatus = refreshed.status;
         }
+      }
+
+      if (bundle.details != null) {
+        _setActiveDeliveryCharges(orderId, bundle.details!);
       }
 
       if (currentOrder.value.vendor == null &&
@@ -2563,66 +2259,6 @@ class HomeController extends GetxController {
       return false;
     } finally {
       _isRefreshing = false;
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  Force-refresh one order
-  // ══════════════════════════════════════════════════════════════════════
-
-  Future<void> _forceRefreshOrder(String orderId) async {
-    try {
-      // Primary endpoint: CO complete order details.
-      OrderModel? refreshed = await OrderDetailService.fetchOrder(orderId);
-
-      // Legacy driver endpoint (kept only as a fallback for older backends).
-      refreshed ??= await _fetchLegacyDriverCurrentOrder(orderId, forceRefresh: true);
-
-      // Legacy restaurant endpoint (kept only as a fallback for older backends).
-      if (refreshed == null) {
-        final h = HttpClientService();
-        final res = await h.get(
-          Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
-          headers: {'Accept': 'application/json'},
-          cacheStrategy: CacheStrategy.order,
-          useCache: false,
-          forceRefresh: true,
-          timeout: const Duration(seconds: 10),
-        );
-        if (res.statusCode == 200 && !res.body.startsWith('<')) {
-          final d = jsonDecode(res.body);
-          if (d['success'] == true && d['data'] != null) {
-            refreshed = OrderModel.fromJson(d['data']);
-          }
-        }
-      }
-
-      if (refreshed == null) return;
-
-      final priority  = {
-        Constant.driverPending: 1,
-        Constant.driverAccepted: 2,
-        Constant.orderShipped: 2,
-        Constant.orderInTransit: 3,
-        Constant.orderCompleted: 4,
-      };
-      final cur = priority[currentOrder.value.status] ?? 0;
-      final nw  = priority[refreshed.status] ?? 0;
-      if (nw >= cur) {
-        refreshed.driverID = driverModel.value.id;
-        refreshed.driver   = driverModel.value;
-        currentOrder.value = refreshed;
-      }
-      if (currentOrder.value.vendor == null &&
-          (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
-        await _fetchVendorData(currentOrder.value.vendorID!);
-      }
-      await calculateOrderChargesInitial();
-      changeData();
-      _notifyOrderUiChanged();
-      unawaited(_loadDriverDeliveryCharges(orderId, forceRefresh: true));
-    } catch (e) {
-      AppLogger.log('_forceRefreshOrder error: $e', tag: 'API');
     }
   }
 
