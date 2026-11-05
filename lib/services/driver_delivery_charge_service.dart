@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/models/driver_delivery_charge_model.dart';
 import 'package:jippydriver_driver/services/auth_http_client.dart';
@@ -12,8 +11,8 @@ import 'package:jippydriver_driver/utils/common.dart';
 /// Calls the Java backend endpoint that returns the driver-specific pickup /
 /// delivery charges and the outlet / customer details for an order.
 ///
-/// The endpoint is documented as `GET` with a JSON body, so a plain
-/// `http.get` cannot be used (Dart's `http.get` does not support a body).
+/// The backend expects the driver coordinates + order id as query parameters
+/// on a `GET` request.
 class DriverDeliveryChargeService {
   DriverDeliveryChargeService._();
 
@@ -28,15 +27,23 @@ class DriverDeliveryChargeService {
     final id = orderId.trim();
     if (id.isEmpty) return null;
 
-    final body = jsonEncode({
-      'driverLatitude': driverLatitude,
-      'driverLongitude': driverLongitude,
+    final queryParams = <String, String>{
+      'driverLatitude': driverLatitude.toString(),
+      'driverLongitude': driverLongitude.toString(),
       'orderId': id,
-    });
+    };
 
     try {
-      final url = Uri.parse('${Constant.baseUrl}$_endpoint');
-      var response = await _getWithBody(url, body);
+      // The backend binds the driver coordinates + order id as query
+      // parameters, so send them that way instead of a GET body (a GET body is
+      // rejected with 400 by the running Java backend).
+      final url = Uri.parse('${Constant.baseUrl}$_endpoint')
+          .replace(queryParameters: queryParams);
+      var response = await AuthHttpClient().get(
+        url,
+        headers: await getHeaders(),
+        timeout: _timeout,
+      );
 
       // Some deployments expose the endpoint as POST instead of GET. Retry
       // only for method-related responses so normal 4xx errors are not hidden.
@@ -48,7 +55,7 @@ class DriverDeliveryChargeService {
         response = await AuthHttpClient().post(
           url,
           headers: await getHeaders(),
-          body: body,
+          body: jsonEncode(queryParams),
           timeout: _timeout,
         );
       }
@@ -130,28 +137,6 @@ class DriverDeliveryChargeService {
 
   static bool _isMethodNotAllowed(int statusCode) =>
       statusCode == 405 || statusCode == 415;
-
-  static Future<http.Response> _getWithBody(Uri url, String body) async {
-    var headers = await getHeaders();
-
-    Future<http.Response> send() async {
-      final request = http.Request('GET', url)
-        ..headers.addAll(headers)
-        ..body = body;
-      final streamed = await request.send().timeout(_timeout);
-      return http.Response.fromStream(streamed);
-    }
-
-    var response = await send();
-    if (AuthHttpClient.isUnauthorized(response.statusCode)) {
-      final refreshed = await AuthHttpClient.handleUnauthorized(response);
-      if (refreshed) {
-        headers = await getHeaders();
-        response = await send();
-      }
-    }
-    return response;
-  }
 
   static String _safeBody(String body) =>
       body.length <= 300 ? body : '${body.substring(0, 300)}...';

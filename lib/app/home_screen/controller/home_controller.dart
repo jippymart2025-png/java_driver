@@ -2192,6 +2192,49 @@ class HomeController extends GetxController {
         inProgress: inProgress, requests: requests);
   }
 
+  /// Legacy driver endpoint fallback for older backends.
+  ///
+  /// `GET {baseUrl}driver/get-current-reject-accept?order_id=...&exclude_statuses=...`
+  ///
+  /// Returns the order (including its current accept / reject / pickup status)
+  /// or `null` when the backend cannot serve it, so callers can fall through to
+  /// the legacy restaurant endpoint / primary API.
+  Future<OrderModel?> _fetchLegacyDriverCurrentOrder(
+    String orderId, {
+    bool useCache = true,
+    bool forceRefresh = false,
+  }) async {
+    final id = orderId.trim();
+    if (id.isEmpty) return null;
+
+    final h = HttpClientService();
+    if (forceRefresh) {
+      await h.invalidateCache('orders/$id');
+    }
+
+    try {
+      final res = await h.get(
+        Uri.parse(
+            '${Constant.baseUrl}driver/acceptOrRejectOrderByDriver'
+                '?order_id=$id'
+                '&driverId='
+                'ACCEPT'),
+        headers: {'Accept': 'application/json'},
+        cacheStrategy: CacheStrategy.order,
+        useCache: !forceRefresh,
+        forceRefresh: forceRefresh,
+        timeout: const Duration(seconds: 10),
+      );
+      if (res.statusCode == 200 && !res.body.startsWith('<')) {
+        final d = jsonDecode(res.body);
+        if (d['success'] == true && d['order'] != null) {
+          return OrderModel.fromJson(d['order']);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _fetchAndDisplayOrder(
       String orderId, {
         required List inProgress,
@@ -2203,26 +2246,7 @@ class HomeController extends GetxController {
 
     // Legacy driver endpoint (kept only as a fallback for older backends).
     if (fetched == null) {
-      try {
-        final h   = HttpClientService();
-        final res = await h.get(
-          Uri.parse(
-              '${Constant.baseUrl}driver/get-current-reject-accept'
-                  '?order_id=$orderId'
-                  '&exclude_statuses='
-                  'Order+Cancelled,Driver+Rejected,Order+Completed'),
-          headers: {'Accept': 'application/json'},
-          cacheStrategy: CacheStrategy.order,
-          useCache: true,
-          timeout: const Duration(seconds: 10),
-        );
-        if (res.statusCode == 200 && !res.body.startsWith('<')) {
-          final d = jsonDecode(res.body);
-          if (d['success'] == true && d['order'] != null) {
-            fetched = OrderModel.fromJson(d['order']);
-          }
-        }
-      } catch (_) {}
+      fetched = await _fetchLegacyDriverCurrentOrder(orderId);
     }
 
     // Legacy restaurant endpoint (kept only as a fallback for older backends).
@@ -2316,13 +2340,16 @@ class HomeController extends GetxController {
       // Primary endpoint: CO complete order details.
       OrderModel? refreshed = await OrderDetailService.fetchOrder(orderId);
 
-      // Legacy endpoint (kept only as a fallback for older backends).
+      // Legacy driver endpoint (kept only as a fallback for older backends).
+      refreshed ??= await _fetchLegacyDriverCurrentOrder(
+        orderId,
+        useCache: !forceRefresh,
+        forceRefresh: forceRefresh,
+      );
+
+      // Legacy restaurant endpoint (kept only as a fallback for older backends).
       if (refreshed == null) {
         final h = HttpClientService();
-        if (forceRefresh) {
-          await h.invalidateCache('orders/$orderId');
-        }
-
         final res = await h.get(
           Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
           cacheStrategy: CacheStrategy.order,
@@ -2548,10 +2575,12 @@ class HomeController extends GetxController {
       // Primary endpoint: CO complete order details.
       OrderModel? refreshed = await OrderDetailService.fetchOrder(orderId);
 
-      // Legacy endpoint (kept only as a fallback for older backends).
+      // Legacy driver endpoint (kept only as a fallback for older backends).
+      refreshed ??= await _fetchLegacyDriverCurrentOrder(orderId, forceRefresh: true);
+
+      // Legacy restaurant endpoint (kept only as a fallback for older backends).
       if (refreshed == null) {
         final h = HttpClientService();
-        await h.invalidateCache('orders/$orderId');
         final res = await h.get(
           Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
           headers: {'Accept': 'application/json'},

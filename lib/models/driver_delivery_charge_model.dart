@@ -27,6 +27,8 @@
 ///   "orderTotalAmount": 250
 /// }
 /// ```
+import 'package:jippydriver_driver/models/cart_product_model.dart';
+
 class DriverDeliveryChargeModel {
   final String orderId;
   final String statusCode;
@@ -56,6 +58,10 @@ class DriverDeliveryChargeModel {
   final double tipAmount;
   final double orderTotalAmount;
 
+  /// Line items returned alongside the charges
+  /// (`itemsList` / `items` / `manifestItems`).
+  final List<CartProductModel> products;
+
   const DriverDeliveryChargeModel({
     this.orderId = '',
     this.statusCode = '',
@@ -79,6 +85,7 @@ class DriverDeliveryChargeModel {
     this.customerLongitude = 0,
     this.tipAmount = 0,
     this.orderTotalAmount = 0,
+    this.products = const [],
   });
 
   factory DriverDeliveryChargeModel.fromJson(
@@ -89,7 +96,7 @@ class DriverDeliveryChargeModel {
       orderId: _asString(json['orderId']).isNotEmpty
           ? _asString(json['orderId'])
           : fallbackOrderId,
-      statusCode: _asString(json['statusCode']),
+      statusCode: _asString(json['statusCode'] ?? json['orderStatus']),
       statusMsg: _asString(json['statusMsg']),
       pickupDistanceKm: _asDouble(json['pickupDistanceKm']),
       deliveryDistanceKm: _asDouble(json['deliveryDistanceKm']),
@@ -110,7 +117,18 @@ class DriverDeliveryChargeModel {
       customerLongitude: _asDouble(json['customerLongitude']),
       tipAmount: _asDouble(json['tipAmount']),
       orderTotalAmount: _asDouble(json['orderTotalAmount']),
+      products: _parseProducts(json),
     );
+  }
+
+  /// Line items may come back under `itemsList`, `items` or `manifestItems`.
+  static List<CartProductModel> _parseProducts(Map<String, dynamic> json) {
+    final raw = json['itemsList'] ?? json['items'] ?? json['manifestItems'];
+    if (raw is! List) return const <CartProductModel>[];
+    return raw
+        .whereType<Map>()
+        .map((item) => CartProductModel.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
   }
 
   /// Total distance the driver is expected to cover.

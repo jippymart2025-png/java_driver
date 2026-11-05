@@ -403,6 +403,18 @@ void _showWalletUpdatedPopup() {
       }
       orderModel.value.toPay = amountToCollect.toStringAsFixed(2);
       debugPrint('[DeliverOrderController] Set ToPay: ${orderModel.value.toPay}');
+      // Push the driver-side status transition (ORDER_COMPLETED) to the Java
+      // backend via `driver/acceptOrRejectOrderByDriver` before completing.
+      final statusResult = await OrderWorkflowService.updateOrderStatusByDriver(
+        orderId: orderModel.value.id ?? '',
+        status: Constant.backendOrderStatusOrderCompleted,
+        driverModel: homeController.driverModel.value,
+      );
+      if (statusResult == false) {
+        ShowToastDialog.closeLoader();
+        ShowToastDialog.showToast("Failed to update order status. Please try again.");
+        return;
+      }
       // Update wallet and delivery amount via separate APIs first
       // final ok = await OrderWorkflowService.completeDeliveryOrderBackend(
       //   order: orderModel.value,

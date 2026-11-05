@@ -1,19 +1,18 @@
 import 'package:jippydriver_driver/constant/constant.dart';
-import 'package:jippydriver_driver/constant/send_notification.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/app/home_screen/screens/pickup_order_screen/controller/pickup_order_controller.dart';
 import 'package:jippydriver_driver/models/cart_product_model.dart';
+import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/responsive.dart';
+import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:jippydriver_driver/utils/dark_theme_provider.dart';
-import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/network_image_widget.dart';
 import 'package:jippydriver_driver/widget/my_separator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:jippydriver_driver/utils/app_logger.dart';
 
 class PickupOrderScreen extends StatelessWidget {
   const PickupOrderScreen({super.key});
@@ -541,13 +540,22 @@ class PickupOrderScreen extends StatelessWidget {
                         ShowToastDialog.showToast("Conform pickup order".tr);
                       } else {
                         ShowToastDialog.showLoader("Please wait".tr);
-                        // Update only status field instead of entire order
+                        // Update the order status (DRIVER_PICKS_UP) through the
+                        // backend acceptOrRejectOrderByDriver endpoint.
                         final orderId = controller.orderModel.value.id ?? '';
                         if (orderId.isNotEmpty) {
-                          final ok = await FireStoreUtils.updateOrderStatus(
+                          final ok = await OrderWorkflowService.updateOrderStatusByDriver(
                             orderId: orderId,
-                            status: Constant.orderInTransit,
+                            status: Constant.backendOrderStatusDriverPickedUp,
+                            driverModel: Constant.userModel!,
                           );
+                          if (ok == false) {
+                            ShowToastDialog.closeLoader();
+                            ShowToastDialog.showToast(
+                              "Failed to update order status. Please try again.".tr,
+                            );
+                            return;
+                          }
                           // if (ok == true) {
                           //   // Update local model for UI consistency
                           //   controller.orderModel.value.status = Constant.orderInTransit;

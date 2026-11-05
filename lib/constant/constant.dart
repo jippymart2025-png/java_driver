@@ -76,6 +76,17 @@ class Constant {
   static const String orderCompleted = "Order Completed";
   static const String orderCancelled = "Order Cancelled";
 
+  // Raw order status tokens used by the Java backend
+  // `driver/acceptOrRejectOrderByDriver` endpoint. The backend expects these
+  // uppercase workflow tokens (e.g. `status=ACCEPT`) instead of the human
+  // readable display strings kept above.
+  static const String backendOrderStatusWaitingForDriver = 'WAITING_FOR_DRIVER';
+  static const String backendOrderStatusAccept = 'ACCEPT';
+  static const String backendOrderStatusReject = 'REJECT';
+  static const String backendOrderStatusDriverReached = 'DRIVER_REACHED';
+  static const String backendOrderStatusDriverPickedUp = 'DRIVER_PICKS_UP';
+  static const String backendOrderStatusOrderCompleted = 'ORDER_COMPLETED';
+
   static CurrencyModel? currencyModel;
   static List<TaxModel>? taxList = [];
 
