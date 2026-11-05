@@ -387,8 +387,7 @@ void _showWalletUpdatedPopup() {
       debugPrint("paymentMethod: ${orderModel.value.paymentMethod}");
       debugPrint("deliveryCharge: ${orderModel.value.deliveryCharge}");
       debugPrint("tipAmount: ${orderModel.value.tipAmount}");
-      if (orderModel.value.driverID == null ||
-          orderModel.value.paymentMethod == null) {
+      if (orderModel.value.driverID == null) {
         ShowToastDialog.closeLoader();
         ShowToastDialog.showToast("Order data is incomplete. Cannot complete order.");
         return;
@@ -404,11 +403,12 @@ void _showWalletUpdatedPopup() {
       orderModel.value.toPay = amountToCollect.toStringAsFixed(2);
       debugPrint('[DeliverOrderController] Set ToPay: ${orderModel.value.toPay}');
       // Push the driver-side status transition (ORDER_COMPLETED) to the Java
-      // backend via `driver/acceptOrRejectOrderByDriver` before completing.
-      final statusResult = await OrderWorkflowService.updateOrderStatusByDriver(
+      // backend via `co/updateOrderStatus` before completing.
+      final statusResult = await OrderWorkflowService.updateDriverWorkflowStatus(
         orderId: orderModel.value.id ?? '',
-        status: Constant.backendOrderStatusOrderCompleted,
+        orderStatus: Constant.backendOrderStatusOrderCompleted,
         driverModel: homeController.driverModel.value,
+        outletId: orderModel.value.vendorID?.toString(),
       );
       if (statusResult == false) {
         ShowToastDialog.closeLoader();

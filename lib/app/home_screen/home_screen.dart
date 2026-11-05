@@ -19,6 +19,7 @@ import 'package:jippydriver_driver/main.dart';
 import 'package:jippydriver_driver/models/driver_delivery_charge_model.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
+import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/responsive.dart';
 import 'package:jippydriver_driver/themes/round_button_fill.dart';
@@ -1318,6 +1319,27 @@ class _ActionButton extends StatelessWidget {
   Future<void> _handleTap(BuildContext ctx) async {
     final s = order.status ?? '';
     if (s == Constant.orderShipped || s == Constant.driverAccepted) {
+      final orderId = order.id?.toString().trim() ?? '';
+      // Push DRIVER_REACHED only for the accepted -> reached transition.
+      // If the backend already reports the driver as reached (Order Shipped),
+      // just reopen the pickup screen without repeating the transition.
+      if (orderId.isNotEmpty && s == Constant.driverAccepted) {
+        ShowToastDialog.showLoader('Please wait'.tr);
+        final reached = await OrderWorkflowService.updateDriverWorkflowStatus(
+          orderId: orderId,
+          orderStatus: Constant.backendOrderStatusDriverReached,
+          driverModel: ctrl.driverModel.value,
+          outletId: order.vendorID?.toString(),
+        );
+        ShowToastDialog.closeLoader();
+        if (!reached) {
+          ShowToastDialog.showToast(
+            'Failed to update order status. Please try again.'.tr,
+          );
+          return;
+        }
+      }
+
       final result = await Get.to(
         const PickupOrderScreen(),
         arguments: {'orderModel': order},

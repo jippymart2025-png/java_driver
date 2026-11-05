@@ -375,7 +375,35 @@ class OrderWorkflowService {
   static const String _acceptOrRejectEndpoint =
       'driver/acceptOrRejectOrderByDriver';
 
+  /// Updates an order status by outlet and driver. Used for the post-accept
+  /// workflow transitions: `DRIVER_REACHED`, `DRIVER_PICKS_UP` and
+  /// `ORDER_COMPLETED`.
+  static const String _updateOrderStatusEndpoint = 'co/updateOrderStatus';
+
   static const Duration _workflowTimeout = Duration(seconds: 20);
+
+  /// Builds an absolute API URL from [Constant.baseUrl], supporting both
+  /// `http://host:8084/api/` and `http://host:8084/` formats.
+  static Uri _apiUri(
+    String path, {
+    Map<String, String>? queryParameters,
+  }) {
+    String baseUrl = Constant.baseUrl.trim();
+
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+
+    final String endpoint = baseUrl.endsWith('/api')
+        ? '$baseUrl/$path'
+        : '$baseUrl/api/$path';
+
+    final uri = Uri.parse(endpoint);
+
+    return queryParameters == null
+        ? uri
+        : uri.replace(queryParameters: queryParameters);
+  }
 
   // ============================================================
   // ACCEPT ORDER
@@ -569,21 +597,8 @@ class OrderWorkflowService {
       // Support both Constant.baseUrl formats:
       // http://host:8084/api/
       // http://host:8084/
-      String baseUrl = Constant.baseUrl.trim();
-
-      if (baseUrl.endsWith('/')) {
-        baseUrl = baseUrl.substring(0, baseUrl.length - 1);
-      }
-
-      final String endpoint;
-
-      if (baseUrl.endsWith('/api')) {
-        endpoint = '$baseUrl/$_acceptOrRejectEndpoint';
-      } else {
-        endpoint = '$baseUrl/api/$_acceptOrRejectEndpoint';
-      }
-
-      final uri = Uri.parse(endpoint).replace(
+      final uri = _apiUri(
+        _acceptOrRejectEndpoint,
         queryParameters: queryParams,
       );
 
@@ -675,6 +690,194 @@ class OrderWorkflowService {
       );
       return false;
     }
+  }
+
+  // ============================================================
+  // POST-ACCEPT STATUS API (co/updateOrderStatus)
+  // ============================================================
+
+  /// Updates the order status through `POST /api/co/updateOrderStatus`.
+  ///
+  /// The backend expects a JSON body such as:
+  /// ```json
+  /// {"orderId":"jippy202610232","driverId":1,"orderStatus":"ORDER_COMPLETED","outletId":37}
+  /// ```
+  /// `driverId` and `outletId` are only sent when they are numeric because
+  /// the backend DTO declares them as integers.
+  static Future<bool> updateOrderStatusByOutletAndDriver({
+    required String orderId,
+    required String orderStatus,
+    UserModel? driverModel,
+    String? driverId,
+    String? outletId,
+  }) async {
+    final id = orderId.trim();
+    final status = orderStatus.trim();
+
+    if (id.isEmpty || status.isEmpty) {
+      AppLogger.log(
+        'Order ID or order status missing for co/updateOrderStatus',
+        tag: 'OrderWorkflow',
+      );
+      return false;
+    }
+
+    final resolvedDriverId = driverId?.trim().isNotEmpty == true
+        ? driverId!.trim()
+        : driverModel?.id?.toString().trim() ?? '';
+
+    final body = <String, dynamic>{
+      'orderId': id,
+      'orderStatus': status,
+    };
+
+    final numericDriverId = int.tryParse(resolvedDriverId);
+    if (numericDriverId != null) {
+      body['driverId'] = numericDriverId;
+    }
+
+    final numericOutletId = int.tryParse(outletId?.trim() ?? '');
+    if (numericOutletId != null) {
+      body['outletId'] = numericOutletId;
+    }
+
+    try {
+      final uri = _apiUri(_updateOrderStatusEndpoint);
+      final encodedBody = jsonEncode(body);
+
+      AppLogger.log(
+        'Calling co/updateOrderStatus: $uri body=$encodedBody',
+        tag: 'OrderWorkflow',
+      );
+
+      final response = await AuthHttpClient().put(
+        uri,
+        headers: await getHeaders(),
+        body: encodedBody,
+        timeout: _workflowTimeout,
+      );
+
+      AppLogger.log(
+        'co/updateOrderStatus status: ${response.statusCode}',
+        tag: 'OrderWorkflow',
+      );
+
+      AppLogger.log(
+        'co/updateOrderStatus response: ${response.body}',
+        tag: 'OrderWorkflow',
+      );
+
+      if (response.statusCode == 429) return false;
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        AppLogger.log(
+          'co/updateOrderStatus failed: ${response.statusCode} ${response.body}',
+          tag: 'OrderWorkflow',
+        );
+        return false;
+      }
+
+      if (response.body.trim().isEmpty) return true;
+
+      if (response.body.trim().startsWith('<')) {
+        AppLogger.log(
+          'Unexpected HTML response from co/updateOrderStatus',
+          tag: 'OrderWorkflow',
+        );
+        return false;
+      }
+
+      final decoded = () {
+        try {
+          return jsonDecode(response.body);
+        } catch (_) {
+          return null;
+        }
+      }();
+
+      // Some backends return a plain-text "SUCCESS" instead of JSON.
+      if (decoded == null) {
+        final text = response.body.trim().toLowerCase();
+        return text != 'failed' &&
+            text != 'failure' &&
+            text != 'error';
+      }
+
+      if (decoded is! Map) return true;
+
+      final root = Map<String, dynamic>.from(decoded);
+      final data = _unwrapWorkflowData(root);
+
+      final explicitSuccess = data['success'] ?? root['success'];
+      if (explicitSuccess is bool) return explicitSuccess;
+
+      final statusCode =
+          (data['statusCode'] ?? root['statusCode'] ?? '')
+              .toString()
+              .trim();
+
+      if (statusCode.isEmpty) return true;
+
+      final numericCode = int.tryParse(statusCode);
+      final normalized = statusCode.toLowerCase();
+
+      final isApiFailure = (numericCode != null && numericCode != 200) ||
+          normalized == 'failed' ||
+          normalized == 'failure' ||
+          normalized == 'error';
+
+      return !isApiFailure;
+    } on TimeoutException {
+      AppLogger.log(
+        'co/updateOrderStatus timeout: $id ($status)',
+        tag: 'OrderWorkflow',
+      );
+      return false;
+    } catch (e, stackTrace) {
+      AppLogger.log(
+        'co/updateOrderStatus exception: $e\n$stackTrace',
+        tag: 'OrderWorkflow',
+      );
+      return false;
+    }
+  }
+
+  /// High-level status transition used by the driver UI.
+  ///
+  /// Calls the new `co/updateOrderStatus` endpoint first and falls back to the
+  /// legacy `driver/acceptOrRejectOrderByDriver` endpoint so a transient failure
+  /// in one route does not leave the local UI out of sync with the backend.
+  static Future<bool> updateDriverWorkflowStatus({
+    required String orderId,
+    required String orderStatus,
+    UserModel? driverModel,
+    String? outletId,
+  }) async {
+    final result = await updateOrderStatusByOutletAndDriver(
+      orderId: orderId,
+      orderStatus: orderStatus,
+      driverModel: driverModel,
+      outletId: outletId,
+    );
+
+    if (result) return true;
+
+    final fallbackDriver = driverModel ?? Constant.userModel;
+    if (fallbackDriver == null) return false;
+
+    AppLogger.log(
+      'co/updateOrderStatus failed for $orderId ($orderStatus); '
+      'falling back to driver/acceptOrRejectOrderByDriver',
+      tag: 'OrderWorkflow',
+    );
+
+    final fallback = await updateOrderStatusByDriver(
+      orderId: orderId,
+      status: orderStatus,
+      driverModel: fallbackDriver,
+    );
+
+    return fallback == true;
   }
 
   // ============================================================

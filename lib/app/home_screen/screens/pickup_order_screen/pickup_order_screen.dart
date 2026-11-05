@@ -541,13 +541,16 @@ class PickupOrderScreen extends StatelessWidget {
                       } else {
                         ShowToastDialog.showLoader("Please wait".tr);
                         // Update the order status (DRIVER_PICKS_UP) through the
-                        // backend acceptOrRejectOrderByDriver endpoint.
+                        // new co/updateOrderStatus endpoint (with legacy
+                        // acceptOrRejectOrderByDriver as a fallback).
                         final orderId = controller.orderModel.value.id ?? '';
                         if (orderId.isNotEmpty) {
-                          final ok = await OrderWorkflowService.updateOrderStatusByDriver(
+                          final ok = await OrderWorkflowService.updateDriverWorkflowStatus(
                             orderId: orderId,
-                            status: Constant.backendOrderStatusDriverPickedUp,
-                            driverModel: Constant.userModel!,
+                            orderStatus: Constant.backendOrderStatusDriverPickedUp,
+                            driverModel: Constant.userModel,
+                            outletId:
+                                controller.orderModel.value.vendorID?.toString(),
                           );
                           if (ok == false) {
                             ShowToastDialog.closeLoader();
