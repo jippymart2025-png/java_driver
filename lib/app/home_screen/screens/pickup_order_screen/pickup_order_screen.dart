@@ -2,6 +2,7 @@ import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/app/home_screen/screens/pickup_order_screen/controller/pickup_order_controller.dart';
 import 'package:jippydriver_driver/models/cart_product_model.dart';
+import 'package:jippydriver_driver/services/driver_delivery_location_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
 import 'package:jippydriver_driver/themes/responsive.dart';
@@ -559,6 +560,14 @@ class PickupOrderScreen extends StatelessWidget {
                             );
                             return;
                           }
+
+                          // The order is now picked up. Start sending the
+                          // driver's location every 10 seconds until delivery.
+                          DriverDeliveryLocationService.instance.start(
+                            orderId: orderId,
+                            driverId: Constant.userModel?.id?.toString(),
+                          );
+
                           // if (ok == true) {
                           //   // Update local model for UI consistency
                           //   controller.orderModel.value.status = Constant.orderInTransit;

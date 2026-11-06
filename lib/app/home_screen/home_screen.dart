@@ -17,6 +17,7 @@ import 'package:jippydriver_driver/app/home_screen/widgets/today_dashboard_secti
 import 'package:jippydriver_driver/main.dart';
 import 'package:jippydriver_driver/models/driver_delivery_charge_model.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
+import 'package:jippydriver_driver/services/driver_delivery_location_service.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/themes/app_them_data.dart';
@@ -1262,6 +1263,7 @@ class _ActionButton extends StatelessWidget {
           (result is String ? result : null) ?? order.id?.toString();
       if (completedId != null) {
         ctrl.markOrderAsCompleted(completedId);
+        DriverDeliveryLocationService.instance.stop(orderId: completedId);
         ctrl.driverModel.value.inProgressOrderID
             ?.removeWhere((id) => id?.toString() == completedId);
         ctrl.driverModel.value.orderRequestData

@@ -7,6 +7,7 @@ import 'package:jippydriver_driver/constant/send_notification.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/services/audio_player_service.dart';
+import 'package:jippydriver_driver/services/driver_delivery_location_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
@@ -415,6 +416,13 @@ void _showWalletUpdatedPopup() {
         ShowToastDialog.showToast("Failed to update order status. Please try again.");
         return;
       }
+
+      // Delivery is complete — no more location polling is needed for this
+      // order. Do this before the wallet popup so no stale requests continue.
+      DriverDeliveryLocationService.instance.stop(
+        orderId: orderModel.value.id,
+      );
+
       // Update wallet and delivery amount via separate APIs first
       // final ok = await OrderWorkflowService.completeDeliveryOrderBackend(
       //   order: orderModel.value,

@@ -15,6 +15,7 @@ import 'package:jippydriver_driver/models/vendor_model.dart';
 import 'package:jippydriver_driver/services/audio_player_service.dart';
 import 'package:jippydriver_driver/services/api_cache_service.dart';
 import 'package:jippydriver_driver/services/driver_delivery_charge_service.dart';
+import 'package:jippydriver_driver/services/driver_delivery_location_service.dart';
 import 'package:jippydriver_driver/services/order_detail_service.dart';
 import 'package:jippydriver_driver/services/order_workflow_service.dart';
 import 'package:jippydriver_driver/services/http_client_service.dart';
@@ -486,6 +487,10 @@ class HomeController extends GetxController {
       if (!was && _isConnected) {
         AppLogger.log('Network restored', tag: 'Poll');
         if (!_isPolling) _startPolling();
+        final locationService = DriverDeliveryLocationService.instance;
+        if (locationService.isTracking) {
+          unawaited(locationService.sendNow());
+        }
       } else if (was && !_isConnected) {
         AppLogger.log('Network lost', tag: 'Poll');
         _pollTimer?.cancel();
@@ -515,6 +520,10 @@ class HomeController extends GetxController {
       _noOrderCount = 0;
       if (_isPolling) _restartPolling(const Duration(seconds: 5));
       forceRefreshOrders();
+      final locationService = DriverDeliveryLocationService.instance;
+      if (locationService.isTracking) {
+        unawaited(locationService.sendNow());
+      }
     }
   }
 
@@ -687,6 +696,23 @@ class HomeController extends GetxController {
   void _notifyOrderUiChanged({bool refreshOrder = true}) {
     PerfTelemetry.inc('home_order_ui_refreshes');
     if (refreshOrder) currentOrder.refresh();
+  }
+
+  /// Keeps the delivery-location heartbeat in sync with the active order.
+  /// Location updates are sent only while the order is in transit.
+  void _syncDeliveryLocationTracking() {
+    final service = DriverDeliveryLocationService.instance;
+    final orderId = currentOrder.value.id?.trim() ?? '';
+
+    if (orderId.isEmpty ||
+        currentOrder.value.status != Constant.orderInTransit) {
+      service.stop();
+      return;
+    }
+
+    final driverId = driverModel.value.id?.toString() ??
+        Constant.userModel?.id?.toString();
+    service.start(orderId: orderId, driverId: driverId);
   }
 
   void markOrderAsCompleted(String? id) {
@@ -1626,6 +1652,7 @@ class HomeController extends GetxController {
         _notifiedOrderIds.remove(orderId);
 
         currentOrder.value = OrderModel();
+        _syncDeliveryLocationTracking();
         _clearDriverDeliveryCharges();
 
         await clearMap();
@@ -1697,6 +1724,7 @@ class HomeController extends GetxController {
       );
 
       currentOrder.value = OrderModel();
+      _syncDeliveryLocationTracking();
       _clearDriverDeliveryCharges();
       await clearMap();
       _notifyOrderUiChanged(refreshOrder: false);
@@ -1859,6 +1887,7 @@ class HomeController extends GetxController {
               (currentOrder.value.driverID?.isEmpty ?? true);
       if (!isPendingNoDriver) {
         currentOrder.value = OrderModel();
+        _syncDeliveryLocationTracking();
         _clearDriverDeliveryCharges();
         await clearMap();
         await AudioPlayerService.playSound(false);
@@ -1888,6 +1917,7 @@ class HomeController extends GetxController {
 
     if (firstId == null) return;
     if (currentOrder.value.id == firstId) {
+      _syncDeliveryLocationTracking();
       await _syncVendorAndChargesForCurrentOrder();
       return;
     }
@@ -1982,6 +2012,7 @@ class HomeController extends GetxController {
       await FireStoreUtils.updateUser(driverModel.value);
       if (currentOrder.value.id == orderId) {
         currentOrder.value = OrderModel();
+        _syncDeliveryLocationTracking();
         _clearDriverDeliveryCharges();
         await clearMap();
         await AudioPlayerService.playSound(false);
@@ -1997,6 +2028,7 @@ class HomeController extends GetxController {
       await FireStoreUtils.updateUser(driverModel.value);
       if (currentOrder.value.id == fetched.id) {
         currentOrder.value = OrderModel();
+        _syncDeliveryLocationTracking();
         _clearDriverDeliveryCharges();
         await clearMap();
       }
@@ -2006,6 +2038,7 @@ class HomeController extends GetxController {
     }
 
     currentOrder.value = fetched;
+    _syncDeliveryLocationTracking();
     if (_deliveryChargesOrderId != fetched.id) {
       _clearDriverDeliveryCharges();
     }
@@ -2079,6 +2112,7 @@ class HomeController extends GetxController {
         driverModel.value.orderRequestData?.remove(currentOrder.value.id);
         await FireStoreUtils.updateUser(driverModel.value);
         currentOrder.value = OrderModel();
+        _syncDeliveryLocationTracking();
         _clearDriverDeliveryCharges();
         await clearMap();
         resetStatusTracking();
@@ -2090,6 +2124,7 @@ class HomeController extends GetxController {
         final changed =
             _lastKnownStatus != null && _lastKnownStatus != refreshed.status;
         currentOrder.value = refreshed;
+        _syncDeliveryLocationTracking();
         if (changed) {
           _lastStatusChangeTime = DateTime.now();
           _lastKnownStatus      = refreshed.status;
@@ -2129,6 +2164,29 @@ class HomeController extends GetxController {
     final id = raw.toString().trim();
     if (id.isEmpty || id.toLowerCase() == 'null') return null;
     return id;
+  }
+
+  /// Returns true only when publishing [next] would change what the home
+  /// screen renders. `refreshHomeScreen` runs on every poll, so skipping
+  /// unchanged assignments avoids rebuilding the whole screen.
+  bool _driverSnapshotChanged(UserModel next) {
+    final current = driverModel.value;
+
+    // These fields are not part of `UserModel.toJson()`, so compare them
+    // explicitly. The remaining profile fields use the serialized snapshot;
+    // `refreshHomeScreen` has already copied the live GPS fix into [next], so
+    // the location cannot cause a false positive.
+    if (current.walletAmount != next.walletAmount ||
+        current.deliveryAmount != next.deliveryAmount ||
+        current.vendorID != next.vendorID ||
+        current.inProgressOrderID.toString() !=
+            next.inProgressOrderID.toString() ||
+        current.orderRequestData.toString() !=
+            next.orderRequestData.toString()) {
+      return true;
+    }
+
+    return current.toJson().toString() != next.toJson().toString();
   }
 
   bool _looksLikeDriverPayload(Map<String, dynamic> map) {
@@ -2215,7 +2273,18 @@ class HomeController extends GetxController {
 
         final parsed = UserModel.fromJson(userDetails);
         _filterCompletedFromUser(parsed);
-        driverModel.value = parsed;
+
+        // Keep the latest GPS fix: the driver profile copy can lag behind the
+        // live location stream and would make the driver marker jump back.
+        final liveLocation = driverModel.value.location;
+        if (liveLocation?.latitude != null &&
+            liveLocation?.longitude != null) {
+          parsed.location = liveLocation;
+        }
+
+        if (_driverSnapshotChanged(parsed)) {
+          driverModel.value = parsed;
+        }
       }
 
       final curr   = driverModel.value.orderRequestData?.toList();

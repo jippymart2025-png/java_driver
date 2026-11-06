@@ -17,6 +17,7 @@ import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/app/auth_screen/controller/login_controller.dart';
 import 'package:jippydriver_driver/models/order_model.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
+import 'package:jippydriver_driver/services/driver_delivery_location_service.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:jippydriver_driver/utils/driver_location_sync.dart';
 import 'package:jippydriver_driver/utils/fire_store_utils.dart';
@@ -272,6 +273,15 @@ class DashBoardController extends GetxController with WidgetsBindingObserver {
   Future<void> _onLocation(loc.LocationData data) async {
     // Always update Constant so other widgets can read fresh coords
     Constant.locationDataFinal = data;
+
+    // Feed the delivery tracker with every GPS fix. The tracker sends at most
+    // once per 10 seconds and only while an order is out for delivery.
+    final latitude = data.latitude;
+    final longitude = data.longitude;
+    if (latitude != null && longitude != null) {
+      DriverDeliveryLocationService.instance
+          .updateLocation(latitude, longitude);
+    }
 
     // Do not coerce null GPS to 0,0 — that breaks distance/charge math.
     final newLoc = UserLocation(

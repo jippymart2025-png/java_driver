@@ -13,6 +13,7 @@ import 'package:jippydriver_driver/app/verification_screen/screens/verification_
 import 'package:jippydriver_driver/constant/constant.dart';
 import 'package:jippydriver_driver/constant/show_toast_dialog.dart';
 import 'package:jippydriver_driver/models/user_model.dart';
+import 'package:jippydriver_driver/services/driver_delivery_location_service.dart';
 import 'package:jippydriver_driver/services/safe_http_client.dart';
 import 'package:jippydriver_driver/utils/app_logger.dart';
 import 'package:jippydriver_driver/utils/driver_location_sync.dart';
@@ -827,6 +828,7 @@ class LoginController extends GetxController {
 
   static Future<void> logout() async {
     try {
+      DriverDeliveryLocationService.instance.stop();
       final prefs = await SharedPreferences.getInstance();
       final uid = prefs.getString('firebase_id') ?? '';
 

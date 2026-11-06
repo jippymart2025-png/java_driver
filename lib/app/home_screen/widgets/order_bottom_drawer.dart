@@ -22,17 +22,20 @@ class OrderBottomDrawer extends StatelessWidget {
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 220),
           opacity: visible ? 1 : 0,
-          child: Material(
-            elevation: 14,
-            color: Colors.transparent,
-            child: SafeArea(
-              top: false,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: AppThemeData.grey50,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          child: RepaintBoundary(
+            child: Material(
+              elevation: 14,
+              color: Colors.transparent,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: AppThemeData.grey50,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: child,
                 ),
-                child: child,
               ),
             ),
           ),
