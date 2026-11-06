@@ -982,9 +982,10 @@ class OrderWorkflowService {
 
     order.status = Constant.orderCompleted;
 
-    // Update wallet and order.
+    // Update wallet. The legacy `POST restaurant/orders` route is not part of
+    // the Java backend, so the order status/charging APIs above are the only
+    // source of truth.
     await FireStoreUtils.updateWallateAmount(order);
-    await FireStoreUtils.setOrder(order);
 
     // Remove completed order from other drivers.
     await FireStoreUtils.removeOrderFromOtherDrivers(

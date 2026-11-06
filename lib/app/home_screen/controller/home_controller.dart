@@ -1609,7 +1609,11 @@ class HomeController extends GetxController {
         // Follow-up operations should not undo a successful API acceptance.
         try {
           await calculateOrderCharges();
-          await FireStoreUtils.setOrder(currentOrder.value);
+
+          // Do not sync the whole order through the legacy
+          // `POST restaurant/orders` endpoint. The accept API above is the
+          // source of truth, and the legacy route returns 404 on the Java
+          // backend.
 
           if (currentOrder.value.author?.fcmToken != null) {
             await SendNotification.sendFcmMessage(
@@ -2009,7 +2013,9 @@ class HomeController extends GetxController {
     if (fetched == null || fetched.id == null) {
       inProgress.remove(orderId);
       requests.remove(orderId);
-      await FireStoreUtils.updateUser(driverModel.value);
+      // Do not call `updateDriverDetails` here. It does not persist order
+      // lists (they are not part of `UserModel.toJson()`), and doing so could
+      // fire again on every poll while the order is still listed server-side.
       if (currentOrder.value.id == orderId) {
         currentOrder.value = OrderModel();
         _syncDeliveryLocationTracking();
@@ -2025,7 +2031,6 @@ class HomeController extends GetxController {
       markOrderAsCompleted(fetched.id);
       driverModel.value.inProgressOrderID?.remove(fetched.id);
       driverModel.value.orderRequestData?.remove(fetched.id);
-      await FireStoreUtils.updateUser(driverModel.value);
       if (currentOrder.value.id == fetched.id) {
         currentOrder.value = OrderModel();
         _syncDeliveryLocationTracking();
@@ -2110,7 +2115,6 @@ class HomeController extends GetxController {
         markOrderAsCompleted(currentOrder.value.id);
         driverModel.value.inProgressOrderID?.remove(currentOrder.value.id);
         driverModel.value.orderRequestData?.remove(currentOrder.value.id);
-        await FireStoreUtils.updateUser(driverModel.value);
         currentOrder.value = OrderModel();
         _syncDeliveryLocationTracking();
         _clearDriverDeliveryCharges();
