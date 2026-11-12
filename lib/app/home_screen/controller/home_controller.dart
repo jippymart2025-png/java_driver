@@ -2067,93 +2067,93 @@ class HomeController extends GetxController {
   //  refreshCurrentOrder
   // ══════════════════════════════════════════════════════════════════════
 
-  Future<void> refreshCurrentOrder({bool forceRefresh = false}) async {
-    if (currentOrder.value.id == null) return;
-    try {
-      final orderId = currentOrder.value.id!;
-
-      // Primary endpoint: CO complete order details + charges in one call.
-      final bundle = await OrderDetailService.fetchOrderBundle(orderId);
-      OrderModel? refreshed = bundle.order;
-
-      // Legacy driver endpoint (kept only as a fallback for older backends).
-      refreshed ??= await _fetchLegacyDriverCurrentOrder(
-        orderId,
-        useCache: !forceRefresh,
-        forceRefresh: forceRefresh,
-      );
-
-      // Legacy restaurant endpoint (kept only as a fallback for older backends).
-      if (refreshed == null) {
-        final h = HttpClientService();
-        final res = await h.get(
-          Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
-          cacheStrategy: CacheStrategy.order,
-          useCache: !forceRefresh,
-          forceRefresh: forceRefresh,
-        );
-        if (res.statusCode == 200 && !res.body.startsWith('<')) {
-          final body = jsonDecode(res.body);
-          if (body['success'] == true && body['data'] != null) {
-            refreshed = OrderModel.fromJson(body['data']);
-          }
-        }
-      }
-
-      if (refreshed == null) return;
-      final priority  = {
-        Constant.driverPending: 1,
-        Constant.driverAccepted: 2,
-        Constant.orderShipped: 2,
-        Constant.orderInTransit: 3,
-        Constant.orderCompleted: 4,
-      };
-      final cur = priority[currentOrder.value.status] ?? 0;
-      final nw  = priority[refreshed.status] ?? 0;
-
-      if (refreshed.status == Constant.orderCompleted) {
-        markOrderAsCompleted(currentOrder.value.id);
-        driverModel.value.inProgressOrderID?.remove(currentOrder.value.id);
-        driverModel.value.orderRequestData?.remove(currentOrder.value.id);
-        currentOrder.value = OrderModel();
-        _syncDeliveryLocationTracking();
-        _clearDriverDeliveryCharges();
-        await clearMap();
-        resetStatusTracking();
-        _notifyOrderUiChanged(refreshOrder: false);
-        return;
-      }
-
-      if (nw >= cur || forceRefresh) {
-        final changed =
-            _lastKnownStatus != null && _lastKnownStatus != refreshed.status;
-        currentOrder.value = refreshed;
-        _syncDeliveryLocationTracking();
-        if (changed) {
-          _lastStatusChangeTime = DateTime.now();
-          _lastKnownStatus      = refreshed.status;
-          currentOrder.refresh();
-        } else {
-          _lastKnownStatus = refreshed.status;
-        }
-      }
-
-      if (bundle.details != null) {
-        _setActiveDeliveryCharges(orderId, bundle.details!);
-      }
-
-      if (currentOrder.value.vendor == null &&
-          (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
-        await _fetchVendorData(currentOrder.value.vendorID!);
-      }
-
-      await _syncVendorAndChargesForCurrentOrder();
-      changeData();
-      _notifyOrderUiChanged(refreshOrder: false);
-    } catch (e) {
-      AppLogger.log('refreshCurrentOrder error: $e', tag: 'API');
-    }
-  }
+  // Future<void> refreshCurrentOrder({bool forceRefresh = false}) async {
+  //   if (currentOrder.value.id == null) return;
+  //   try {
+  //     final orderId = currentOrder.value.id!;
+  //
+  //     // Primary endpoint: CO complete order details + charges in one call.
+  //     final bundle = await OrderDetailService.fetchOrderBundle(orderId);
+  //     OrderModel? refreshed = bundle.order;
+  //
+  //     // Legacy driver endpoint (kept only as a fallback for older backends).
+  //     refreshed ??= await _fetchLegacyDriverCurrentOrder(
+  //       orderId,
+  //       useCache: !forceRefresh,
+  //       forceRefresh: forceRefresh,
+  //     );
+  //
+  //     // Legacy restaurant endpoint (kept only as a fallback for older backends).
+  //     if (refreshed == null) {
+  //       final h = HttpClientService();
+  //       final res = await h.get(
+  //         Uri.parse('${Constant.baseUrl}restaurant/orders/$orderId'),
+  //         cacheStrategy: CacheStrategy.order,
+  //         useCache: !forceRefresh,
+  //         forceRefresh: forceRefresh,
+  //       );
+  //       if (res.statusCode == 200 && !res.body.startsWith('<')) {
+  //         final body = jsonDecode(res.body);
+  //         if (body['success'] == true && body['data'] != null) {
+  //           refreshed = OrderModel.fromJson(body['data']);
+  //         }
+  //       }
+  //     }
+  //
+  //     if (refreshed == null) return;
+  //     final priority  = {
+  //       Constant.driverPending: 1,
+  //       Constant.driverAccepted: 2,
+  //       Constant.orderShipped: 2,
+  //       Constant.orderInTransit: 3,
+  //       Constant.orderCompleted: 4,
+  //     };
+  //     final cur = priority[currentOrder.value.status] ?? 0;
+  //     final nw  = priority[refreshed.status] ?? 0;
+  //
+  //     if (refreshed.status == Constant.orderCompleted) {
+  //       markOrderAsCompleted(currentOrder.value.id);
+  //       driverModel.value.inProgressOrderID?.remove(currentOrder.value.id);
+  //       driverModel.value.orderRequestData?.remove(currentOrder.value.id);
+  //       currentOrder.value = OrderModel();
+  //       _syncDeliveryLocationTracking();
+  //       _clearDriverDeliveryCharges();
+  //       await clearMap();
+  //       resetStatusTracking();
+  //       _notifyOrderUiChanged(refreshOrder: false);
+  //       return;
+  //     }
+  //
+  //     if (nw >= cur || forceRefresh) {
+  //       final changed =
+  //           _lastKnownStatus != null && _lastKnownStatus != refreshed.status;
+  //       currentOrder.value = refreshed;
+  //       _syncDeliveryLocationTracking();
+  //       if (changed) {
+  //         _lastStatusChangeTime = DateTime.now();
+  //         _lastKnownStatus      = refreshed.status;
+  //         currentOrder.refresh();
+  //       } else {
+  //         _lastKnownStatus = refreshed.status;
+  //       }
+  //     }
+  //
+  //     if (bundle.details != null) {
+  //       _setActiveDeliveryCharges(orderId, bundle.details!);
+  //     }
+  //
+  //     if (currentOrder.value.vendor == null &&
+  //         (currentOrder.value.vendorID?.isNotEmpty ?? false)) {
+  //       await _fetchVendorData(currentOrder.value.vendorID!);
+  //     }
+  //
+  //     await _syncVendorAndChargesForCurrentOrder();
+  //     changeData();
+  //     _notifyOrderUiChanged(refreshOrder: false);
+  //   } catch (e) {
+  //     AppLogger.log('refreshCurrentOrder error: $e', tag: 'API');
+  //   }
+  // }
 
   // ══════════════════════════════════════════════════════════════════════
   //  refreshHomeScreen
@@ -2319,7 +2319,7 @@ class HomeController extends GetxController {
         final shouldRefresh = _lastStatusChangeTime == null ||
             DateTime.now().difference(_lastStatusChangeTime!) >
                 _statusCooldown;
-        if (shouldRefresh) await refreshCurrentOrder();
+        // if (shouldRefresh) await refreshCurrentOrder();
       } else {
         await getCurrentOrder();
       }

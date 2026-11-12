@@ -1249,7 +1249,7 @@ class _ActionButton extends StatelessWidget {
         ctrl.currentOrder.value = cached;
         ctrl.currentOrder.refresh();
         await Future.delayed(const Duration(milliseconds: 800));
-        await ctrl.refreshCurrentOrder(forceRefresh: true);
+        // await ctrl.refreshCurrentOrder(forceRefresh: true);
       }
       return;
     }
