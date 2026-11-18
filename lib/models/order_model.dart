@@ -114,6 +114,12 @@ class OrderModel {
       case 'WAITING_FOR_DRIVER':
         return Constant.driverPending;
       case 'DRIVER_ACCEPTED':
+      case 'DRIVER_ASSIGNED':
+      case 'MANUAL_ASSIGNMENT':
+      case 'MANUAL_ASSIGNED':
+      case 'DRIVER_MANUAL_ASSIGNMENT':
+      case 'DRIVER_MANUAL_ASSIGNED':
+      case 'DRIVER_MANUALLY_ASSIGNED':
         return Constant.driverAccepted;
       case 'DRIVER_REACHED':
         return Constant.orderShipped;
