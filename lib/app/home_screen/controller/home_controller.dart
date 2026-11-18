@@ -171,6 +171,15 @@ class HomeController extends GetxController {
   final Set<String>           _notifiedOrderIds           = {};
   final Map<String, DateTime> _recentlyHandledOrderMutes = {};
   static const Duration _handledOrderMuteTtl = Duration(seconds: 20);
+
+  /// Orders the driver explicitly rejected in this session.
+  ///
+  /// The backend can keep returning a rejected id in `orderRequestData` (or
+  /// answer `getActiveOrderByDriverId` from its 10s cache) even though the
+  /// reject already succeeded. These ids stay suppressed for the rest of the
+  /// app session so no stale response can re-open the accept/reject popup.
+  /// Static so a rebuilt/home-route controller shares the same list.
+  static final Set<String> _rejectedOrderIds = <String>{};
   final FlutterLocalNotificationsPlugin _localNotifications =
   FlutterLocalNotificationsPlugin();
 
@@ -727,10 +736,22 @@ class HomeController extends GetxController {
 
   void _filterCompletedFromUser(UserModel m) {
     _cleanupCompletedIds();
-    if (_recentlyCompleted.isEmpty) return;
-    final ids = _recentlyCompleted.keys.toSet();
-    m.inProgressOrderID.removeWhere((id) => ids.contains(id.toString()));
-    m.orderRequestData.removeWhere((id) => ids.contains(id?.toString()));
+    if (_recentlyCompleted.isNotEmpty) {
+      final ids = _recentlyCompleted.keys.toSet();
+      m.inProgressOrderID.removeWhere((id) => ids.contains(id.toString()));
+      m.orderRequestData.removeWhere((id) => ids.contains(id?.toString()));
+    }
+
+    // A rejected order must never be re-added from a cached/stale
+    // `getDriverDetails` response.
+    if (_rejectedOrderIds.isNotEmpty) {
+      m.inProgressOrderID.removeWhere(
+        (id) => _rejectedOrderIds.contains(id.toString()),
+      );
+      m.orderRequestData.removeWhere(
+        (id) => _rejectedOrderIds.contains(id?.toString()),
+      );
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -971,9 +992,11 @@ class HomeController extends GetxController {
 
   /// Accept / reject popup for a new order request.
   bool get showAcceptRejectPopup {
+    final order = currentOrder.value;
+    final oid = order.id;
+    if (oid == null || oid.isEmpty || _isOrderRejected(oid)) return false;
     if (!_hasOrderPopupData || _isActiveOrderForDriver) return false;
 
-    final order = currentOrder.value;
     final status = order.status;
     final isPending = status == Constant.driverPending ||
         status == Constant.orderAccepted ||
@@ -990,6 +1013,8 @@ class HomeController extends GetxController {
 
   /// Active-order card shown after the driver accepts an order.
   bool get showActiveOrderPopup {
+    final oid = currentOrder.value.id;
+    if (oid == null || oid.isEmpty || _isOrderRejected(oid)) return false;
     if (!_hasOrderPopupData || !_isActiveOrderForDriver) return false;
 
     final status = currentOrder.value.status;
@@ -1717,15 +1742,19 @@ class HomeController extends GetxController {
     _changeDataDebounce?.cancel();
     _isRejectingOrder = true;
     await AudioPlayerService.playSound(false);
+    final id = currentOrder.value.id;
+    // Suppress before the network call: the popup must disappear immediately,
+    // and any polling response that was already in flight must not revive it.
+    _suppressRejectedOrder(id);
     try {
-      final id = currentOrder.value.id;
-      if (id != null) _markOrderHandledAndMute(id);
-      _notifiedOrderIds.remove(id);
-
       await OrderWorkflowService.rejectOrderBackend(
         order:       currentOrder.value,
         driverModel: driverModel.value,
       );
+
+      // Drop the cached active-order response, otherwise the next poll keeps
+      // returning this order for up to 10s after it was rejected.
+      await _invalidateOrderRequestCaches();
 
       currentOrder.value = OrderModel();
       _syncDeliveryLocationTracking();
@@ -1738,6 +1767,21 @@ class HomeController extends GetxController {
       await AudioPlayerService.playSound(false);
       _isRejectingOrder = false;
     }
+  }
+
+  /// Clears the APIs that can still report a rejected order:
+  /// `getActiveOrderByDriverId`, `getDriverDetails` and the in-memory
+  /// `FireStoreUtils` profile cache.
+  Future<void> _invalidateOrderRequestCaches() async {
+    try {
+      _lastETag = null;
+      _lastModified = null;
+      final httpClient = HttpClientService();
+      await httpClient.invalidateCache('getActiveOrderByDriverId');
+      await httpClient.invalidateCache('driver/getDriverDetails');
+      final userId = await LoginController.getFirebaseId();
+      FireStoreUtils.invalidateUserProfileCache(userId);
+    } catch (_) {}
   }
 
   bool get isPickupNavigationState {
@@ -1872,7 +1916,19 @@ class HomeController extends GetxController {
 
     final inProgress = driverModel.value.inProgressOrderID ?? [];
     final requests   = driverModel.value.orderRequestData  ?? [];
-    final serverActiveOrderId = _serverActiveOrderId;
+    final rawServerActiveOrderId = _serverActiveOrderId;
+    final serverActiveOrderId = rawServerActiveOrderId != null &&
+            !_isOrderRejected(rawServerActiveOrderId)
+        ? rawServerActiveOrderId
+        : null;
+
+    // A rejected order can still be present in an older cached response.
+    // Never let it become the visible order again.
+    final currentId = currentOrder.value.id;
+    if (currentId != null && _isOrderRejected(currentId)) {
+      await _hideSuppressedOrder(currentId);
+      return;
+    }
 
     final currentIsServerActive = serverActiveOrderId != null &&
         currentOrder.value.id == serverActiveOrderId;
@@ -1906,15 +1962,19 @@ class HomeController extends GetxController {
     if (serverActiveOrderId != null && serverActiveOrderId.isNotEmpty) {
       firstId = serverActiveOrderId;
     } else {
-      final validProgress =
-      inProgress.where((id) => id?.isNotEmpty ?? false).toList();
+      final validProgress = inProgress.where((id) {
+        final value = id?.toString() ?? '';
+        return value.isNotEmpty && !_isOrderRejected(value);
+      }).toList();
       if (validProgress.isNotEmpty) {
         firstId = validProgress.first;
       } else {
-        final validReqs = requests
-            .where((id) =>
-        (id?.isNotEmpty ?? false) && id != currentOrder.value.id)
-            .toList();
+        final validReqs = requests.where((id) {
+          final value = id?.toString() ?? '';
+          return value.isNotEmpty &&
+              id != currentOrder.value.id &&
+              !_isOrderRejected(value);
+        }).toList();
         if (validReqs.isNotEmpty) firstId = validReqs.first;
       }
     }
@@ -1979,6 +2039,14 @@ class HomeController extends GetxController {
         required List inProgress,
         required List requests,
       }) async {
+    // The driver rejected this order; a late response must not show it again.
+    if (_isOrderRejected(orderId)) {
+      inProgress.remove(orderId);
+      requests.remove(orderId);
+      await _hideSuppressedOrder(orderId);
+      return;
+    }
+
     // Primary endpoint: the CO service's complete order details. The same
     // response also carries the charges, so reuse it for the popup instead of
     // making a second network request.
@@ -2039,6 +2107,22 @@ class HomeController extends GetxController {
       }
       resetStatusTracking();
       _notifyOrderUiChanged(refreshOrder: false);
+      return;
+    }
+
+    // The backend may answer the delivery-charges endpoint with the order's
+    // current status. A rejected/cancelled order is not actionable and must
+    // never re-open the accept/reject popup.
+    final fetchedId = fetched.id!;
+    if (_isOrderRejected(fetchedId) ||
+        fetched.status == Constant.orderRejected ||
+        fetched.status == Constant.driverRejected ||
+        fetched.status == Constant.orderCancelled) {
+      _suppressRejectedOrder(fetchedId);
+      inProgress.remove(fetchedId);
+      requests.remove(fetchedId);
+      await _hideSuppressedOrder(fetchedId);
+      resetStatusTracking();
       return;
     }
 
@@ -2237,7 +2321,20 @@ class HomeController extends GetxController {
       );
 
       if (res.statusCode == 304) return false;
-      if (res.statusCode != 200) return false;
+      if (res.statusCode != 200) {
+        if (res.statusCode == 404) {
+          // Backend says this driver has no active order. Drop any id cached
+          // from an earlier poll so `getCurrentOrder` cannot keep showing it.
+          _serverActiveOrderId = null;
+          _lastETag = null;
+          _lastModified = null;
+          final visibleId = currentOrder.value.id;
+          if (visibleId != null && _isOrderRejected(visibleId)) {
+            await _hideSuppressedOrder(visibleId);
+          }
+        }
+        return false;
+      }
 
       final etag = res.headers['etag'];
       final lm   = res.headers['last-modified'];
@@ -2251,8 +2348,13 @@ class HomeController extends GetxController {
       final userDetails = root['data'] is Map
           ? Map<String, dynamic>.from(root['data'] as Map)
           : root;
-      final activeOrderId = _extractActiveOrderId(root) ??
+      var activeOrderId = _extractActiveOrderId(root) ??
           _extractActiveOrderId(userDetails);
+
+      // A rejected order may still be returned by a stale cached response.
+      if (activeOrderId != null && _isOrderRejected(activeOrderId)) {
+        activeOrderId = null;
+      }
 
       // `getActiveOrderByDriverId` may answer with only a status + order id
       // (the driver profile has its own `getDriverDetails` endpoint). Never
@@ -2470,12 +2572,74 @@ class HomeController extends GetxController {
     _recentlyHandledOrderMutes[orderId] = DateTime.now();
   }
 
+  /// Suppresses [orderId] for the rest of the app session after the driver
+  /// rejects it, and removes it from every local order list.
+  ///
+  /// `getActiveOrderByDriverId` answers 404 after a successful reject, but an
+  /// older cached/in-flight response can still carry the order. This set is
+  /// the final guard that keeps the popup hidden in that case.
+  void _suppressRejectedOrder(String? orderId) {
+    final id = orderId?.trim() ?? '';
+    if (id.isEmpty) return;
+
+    final isNew = _rejectedOrderIds.add(id);
+    _recentlyHandledOrderMutes[id] = DateTime.now();
+    _notifiedOrderIds.remove(id);
+    if (isNew) {
+      AppLogger.log('Suppressing rejected order $id', tag: 'OrderWorkflow');
+    }
+
+    if (_serverActiveOrderId == id) _serverActiveOrderId = null;
+
+    driverModel.value.orderRequestData = driverModel.value.orderRequestData
+        .where((e) => e?.toString() != id)
+        .toList();
+    driverModel.value.inProgressOrderID = driverModel.value.inProgressOrderID
+        .where((e) => e.toString() != id)
+        .toList();
+
+    final user = Constant.userModel;
+    if (user != null) {
+      user.orderRequestData = user.orderRequestData
+          .where((e) => e?.toString() != id)
+          .toList();
+      user.inProgressOrderID = user.inProgressOrderID
+          .where((e) => e.toString() != id)
+          .toList();
+    }
+
+    // Nested list assignments do not notify GetX observers by themselves.
+    driverModel.refresh();
+  }
+
+  /// Removes a rejected order from the visible state (popup / active card).
+  Future<void> _hideSuppressedOrder(String orderId) async {
+    if (!_isOrderRejected(orderId)) return;
+    // Re-clean the lists in case a late profile response re-added the id.
+    _suppressRejectedOrder(orderId);
+    if (currentOrder.value.id != orderId) return;
+    currentOrder.value = OrderModel();
+    _syncDeliveryLocationTracking();
+    _clearDriverDeliveryCharges();
+    await clearMap();
+    await AudioPlayerService.playSound(false);
+    _notifyOrderUiChanged(refreshOrder: false);
+  }
+
+  /// True when the driver explicitly rejected [orderId] in this session.
+  bool _isOrderRejected(String orderId) {
+    final id = orderId.trim();
+    return id.isNotEmpty && _rejectedOrderIds.contains(id);
+  }
+
   bool _isOrderMuted(String orderId) {
-    if (orderId.isEmpty) return false;
-    final at = _recentlyHandledOrderMutes[orderId];
+    final id = orderId.trim();
+    if (id.isEmpty) return false;
+    if (_rejectedOrderIds.contains(id)) return true;
+    final at = _recentlyHandledOrderMutes[id];
     if (at == null) return false;
     if (DateTime.now().difference(at) > _handledOrderMuteTtl) {
-      _recentlyHandledOrderMutes.remove(orderId);
+      _recentlyHandledOrderMutes.remove(id);
       return false;
     }
     return true;
